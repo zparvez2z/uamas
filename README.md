@@ -14,7 +14,7 @@ For implementation details, see [TECHNICAL.md](TECHNICAL.md).
 ## Why it is useful
 - It demonstrates research-to-code translation.
 - It shows uncertainty-aware GenAI behavior instead of forced single-label answers.
-- It includes a visible UI for stakeholders and recruiters.
+- It includes a visible UI for stakeholders.
 
 ## Quick start
 ```bash
