@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reliable GenAI Demo</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="container">
+    <section class="card">
+      <div class="header-row">
+        <h1>Reliable GenAI Demo</h1>
+        <span class="runtime-badge runtime-{{ runtime|lower }}">{{ runtime }}</span>
+      </div>
+      <p class="subtitle">Uncertainty-aware prediction with conformal-style set output</p>
+      <p class="model-line">Model: {{ model }}</p>
+
+      <div class="diagnostics-panel">
+        <div class="panel-title">Diagnostics</div>
+        <div class="diagnostics-grid">
+          <div><span>Mode</span><strong>{{ diagnostics.runtime_mode }}</strong></div>
+          <div><span>Last runtime</span><strong>{{ diagnostics.last_runtime }}</strong></div>
+          <div><span>Token present</span><strong>{{ "Yes" if diagnostics.token_present else "No" }}</strong></div>
+          <div><span>Endpoint</span><strong>{{ diagnostics.endpoint }}</strong></div>
+        </div>
+      </div>
+
+      <form method="post" action="/predict">
+        <label for="title">Product Title</label>
+        <input id="title" name="title" type="text" required value="{{ title }}" placeholder="e.g., Men's black running shoes size 42">
+
+        <label for="description">Product Description</label>
+        <textarea id="description" name="description" rows="5" placeholder="e.g., Lightweight mesh upper, cushioned sole, breathable fabric">{{ description }}</textarea>
+
+        <button type="submit">Run Prediction</button>
+      </form>
+
+      {% if error %}
+      <div class="error">{{ error }}</div>
+      {% endif %}
+    </section>
+
+    <section class="card output">
+      <h2>Output</h2>
+      {% if result %}
+      <pre>{{ result }}</pre>
+      {% else %}
+      <p class="placeholder">Submit a product to view category set, attributes, and reliability metadata.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>
