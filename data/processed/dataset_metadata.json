@@ -1,0 +1,16 @@
+{
+  "total_rows": 180,
+  "categories": [
+    "Beauty",
+    "Clothing",
+    "Electronics",
+    "Home",
+    "Shoes",
+    "Sports"
+  ],
+  "split_counts": {
+    "train": 125,
+    "calibration": 24,
+    "test": 31
+  }
+}
