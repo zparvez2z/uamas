@@ -1,81 +1,92 @@
 # UAMAS Evaluation Results
 
-**Generated:** 2026-05-05T15:20:56.803769
+**Generated:** 2026-05-07T23:50:40.061956
+
+**Classifier:** tfidf_logreg_calibrated
+
+**LLM Runtime:** MOCK
 
 ## Summary Metrics
 
 | Metric | Value |
 |--------|-------|
-| Total Products Tested | 8 |
-| Avg Confidence Set Size | 1.0 |
-| Max Set Size | 3 |
-| Min Set Size | 0 |
-| Abstention Rate | 62.0% (5 products) |
-| Avg Runtime | 1796ms |
-| Max Runtime | 2759ms |
+| Total Products Tested | 31 |
+| Target Coverage | 0.700 |
+| Calibrated Cumulative Threshold | 0.6376 |
+| Empirical Coverage | 1.000 |
+| Selective Coverage | 1.0 |
+| Top-1 Accuracy | 1.000 |
+| Avg Confidence Set Size | 2.0 |
+| Avg Non-Abstained Set Size | 2.0 |
+| Abstention Rate | 0.0% (0 products) |
+| Avg Runtime | 3ms |
+| Max Runtime | 21ms |
 
 ## Interpretation
 
-- **Confidence Set Size**: Smaller sets indicate higher confidence; larger sets indicate uncertainty
-- **Abstention Rate**: Products where the pipeline refused to predict (set too large or empty)
-- **Runtime**: Includes LLM API latency for attribute extraction
+- **Empirical Coverage**: fraction of all test rows where the true label is in the returned set.
+- **Selective Coverage**: coverage after abstentions are removed from the denominator.
+- **Calibrated Cumulative Threshold**: cumulative probability mass needed to include labels after calibration.
+- **Abstention Rate**: products where the policy refused to return a category set.
 
 ## Per-Product Results
 
-| # | Product | Set Size | Abstained | Runtime (ms) |
-|---|---------|----------|-----------|---------------|
-| 1 | Samsung 65-inch 4K Smart TV | 3 | — | 1898.58 |
-| 2 | Multi-function Instant Pot Duo | 0 | ✓ | 1697.86 |
-| 3 | Nike Air Max Running Shoes - Men's | 2 | — | 2117.72 |
-| 4 | IKEA Billy Bookcase - White | 0 | ✓ | 2759.23 |
-| 5 | Thing | 0 | ✓ | 2073.4 |
-| 6 | L'Oreal Paris Revitalift Anti-Wrinkle Cr | 3 | — | 1673.1 |
-| 7 | Dyson V15 Detect Cordless Vacuum | 0 | ✓ | 1038.37 |
-| 8 | Yonex Badminton Racket - Professional Gr | 0 | ✓ | 1110.41 |
+| # | Product | True Label | Category Set | Covered | Abstained | Runtime (ms) |
+|---|---------|------------|--------------|---------|-----------|--------------|
+| 1 | soft T-Shirt for everyday wear | Clothing | Clothing | yes | no | 1.48 |
+| 2 | Philips Bluetooth Monitor | Electronics | Electronics, Home | yes | no | 1.25 |
+| 3 | JBL compact Vacuum smart | Electronics | Electronics | yes | no | 1.12 |
+| 4 | Nike Sweater in a practical design | Clothing | Clothing, Shoes | yes | no | 1.09 |
+| 5 | functional Laundry Basket for everyday h | Home | Home, Sports | yes | no | 6.24 |
+| 6 | Puma Walking Shoes with grippy support | Shoes | Shoes, Electronics | yes | no | 10.22 |
+| 7 | Puma Running Shoes with cushioned suppor | Shoes | Shoes, Clothing, Sports | yes | no | 1.19 |
+| 8 | Running Racket for active performance an | Sports | Sports, Electronics | yes | no | 1.03 |
+| 9 | calming Shampoo for daily skincare | Beauty | Beauty, Home | yes | no | 1.02 |
+| 10 | Home&More Storage Box with practical mul | Home | Home, Electronics, Shoes | yes | no | 8.15 |
+| 11 | rich Shampoo for daily skincare | Beauty | Beauty, Home, Clothing | yes | no | 1.09 |
+| 12 | Decathlon Fitness Tracker with breathabl | Sports | Sports, Home | yes | no | 1.08 |
+| 13 | Tom Tailor Shirt with regular fit finish | Clothing | Clothing, Electronics, Beauty | yes | no | 1.13 |
+| 14 | sporty Training Shoes for daily comfort | Shoes | Shoes | yes | no | 11.7 |
+| 15 | Sony Bluetooth Monitor | Electronics | Electronics, Sports | yes | no | 1.32 |
+| 16 | functional Coffee Mug Set for everyday h | Home | Home, Clothing | yes | no | 1.06 |
+| 17 | Puma Running Shoes with breathable suppo | Shoes | Shoes, Sports, Clothing | yes | no | 1.08 |
+| 18 | Babolat Yoga Mat with breathable design | Sports | Sports, Shoes | yes | no | 8.04 |
+| 19 | Dumbbell Set for active performance and  | Sports | Sports, Electronics | yes | no | 1.4 |
+| 20 | Face Cream for radiant skin and comfort | Beauty | Beauty, Electronics | yes | no | 4.9 |
+| 21 | Water Bottle for active performance and  | Sports | Sports | yes | no | 1.55 |
+| 22 | Nike Slip-Ons for everyday use | Shoes | Shoes, Sports, Clothing | yes | no | 1.19 |
+| 23 | minimal Floor Lamp for everyday home use | Home | Home, Clothing, Electronics | yes | no | 0.99 |
+| 24 | Spa Gift Set | Beauty | Beauty, Home, Sports | yes | no | 0.94 |
+| 25 | CeraVe Mascara with modern styling | Beauty | Beauty, Home | yes | no | 0.94 |
+| 26 | Sony mini Wireless Headphones | Electronics | Electronics, Home | yes | no | 20.52 |
+| 27 | Jeans in classic Grau style | Clothing | Clothing | yes | no | 5.0 |
+| 28 | JBL intelligent Wireless Headphones ener | Electronics | Electronics | yes | no | 1.51 |
+| 29 | classic Leggings for everyday wear | Clothing | Clothing | yes | no | 1.35 |
+| 30 | Philips Storage Box with practical easy- | Home | Home, Electronics | yes | no | 1.24 |
+| 31 | Sony sleek Bluetooth Speaker mini | Electronics | Electronics | yes | no | 1.25 |
 
 ## Full JSON Results
 
 ```json
 {
-  "timestamp": "2026-05-05T15:20:56.803769",
-  "total_products": 8,
+  "timestamp": "2026-05-07T23:50:40.061956",
+  "total_products": 31,
+  "classifier_mode": "tfidf_logreg_calibrated",
+  "classifier_ready": true,
+  "classifier_reason": null,
+  "llm_runtime_mode": "MOCK",
   "results": [
     {
       "product_id": 1,
-      "title": "Samsung 65-inch 4K Smart TV",
-      "description": "Ultra HD television with HDR10+ support, 120Hz refresh rate, smart apps...",
+      "title": "soft T-Shirt for everyday wear",
+      "true_label": "Clothing",
       "category_set": [
-        "Electronics",
-        "Shoes",
         "Clothing"
       ],
-      "set_size": 3,
-      "attributes": {
-        "brand": "Samsung",
-        "color": "unknown",
-        "material": "unknown",
-        "size": "65-inch"
-      },
-      "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 3,
-        "confidence": 0.5000000000000001,
-        "abstained": false,
-        "reason": null,
-        "policy_action": "set_output",
-        "llm_runtime": "LIVE",
-        "llm_model": "openai/gpt-4.1"
-      },
-      "runtime_ms": 1898.58,
-      "abstained": false
-    },
-    {
-      "product_id": 2,
-      "title": "Multi-function Instant Pot Duo",
-      "description": "Electric pressure cooker that also functions as slow cooker, rice cooker, steame...",
-      "category_set": [],
-      "set_size": 0,
+      "top_label": "Clothing",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 1,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -85,78 +96,60 @@
       "reliability": {
         "alpha": 0.3,
         "coverage_target": 0.7,
-        "set_size": 0,
-        "confidence": 0.16666666666666669,
-        "abstained": true,
-        "reason": "Prediction set outside usability constraints",
-        "policy_action": "abstain",
-        "llm_runtime": "LIVE",
+        "set_size": 1,
+        "confidence": 0.7429780034516262,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1"
       },
-      "runtime_ms": 1697.86,
-      "abstained": true
+      "runtime_ms": 1.48,
+      "abstained": false
     },
     {
-      "product_id": 3,
-      "title": "Nike Air Max Running Shoes - Men's",
-      "description": "Lightweight cushioned running shoe with mesh upper, black and white colorway...",
+      "product_id": 2,
+      "title": "Philips Bluetooth Monitor",
+      "true_label": "Electronics",
       "category_set": [
-        "Shoes",
-        "Clothing"
+        "Electronics",
+        "Home"
       ],
+      "top_label": "Electronics",
+      "covered": true,
+      "top1_correct": true,
       "set_size": 2,
       "attributes": {
-        "brand": "Nike",
-        "color": "black and white",
-        "material": "mesh",
+        "brand": "unknown",
+        "color": "blue",
+        "material": "unknown",
         "size": "unknown"
       },
       "reliability": {
         "alpha": 0.3,
         "coverage_target": 0.7,
         "set_size": 2,
-        "confidence": 0.6428571428571427,
+        "confidence": 0.6295100160740561,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
-        "llm_runtime": "LIVE",
+        "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1"
       },
-      "runtime_ms": 2117.72,
+      "runtime_ms": 1.25,
       "abstained": false
     },
     {
-      "product_id": 4,
-      "title": "IKEA Billy Bookcase - White",
-      "description": "5-shelf wooden bookcase, flat-pack assembly, dimensions 80x28x106 cm...",
-      "category_set": [],
-      "set_size": 0,
-      "attributes": {
-        "brand": "IKEA",
-        "color": "White",
-        "material": "Wood",
-        "size": "80x28x106 cm"
-      },
-      "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 0,
-        "confidence": 0.16666666666666669,
-        "abstained": true,
-        "reason": "Prediction set outside usability constraints",
-        "policy_action": "abstain",
-        "llm_runtime": "LIVE",
-        "llm_model": "openai/gpt-4.1"
-      },
-      "runtime_ms": 2759.23,
-      "abstained": true
-    },
-    {
-      "product_id": 5,
-      "title": "Thing",
-      "description": "A product...",
-      "category_set": [],
-      "set_size": 0,
+      "product_id": 3,
+      "title": "JBL compact Vacuum smart",
+      "true_label": "Electronics",
+      "category_set": [
+        "Electronics"
+      ],
+      "top_label": "Electronics",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 1,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -166,29 +159,128 @@
       "reliability": {
         "alpha": 0.3,
         "coverage_target": 0.7,
-        "set_size": 0,
-        "confidence": 0.16666666666666669,
-        "abstained": true,
-        "reason": "Prediction set outside usability constraints",
-        "policy_action": "abstain",
-        "llm_runtime": "LIVE",
+        "set_size": 1,
+        "confidence": 0.6816309386286228,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1"
       },
-      "runtime_ms": 2073.4,
-      "abstained": true
+      "runtime_ms": 1.12,
+      "abstained": false
+    },
+    {
+      "product_id": 4,
+      "title": "Nike Sweater in a practical design",
+      "true_label": "Clothing",
+      "category_set": [
+        "Clothing",
+        "Shoes"
+      ],
+      "top_label": "Clothing",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "nike",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.6235957213692008,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.09,
+      "abstained": false
+    },
+    {
+      "product_id": 5,
+      "title": "functional Laundry Basket for everyday home use",
+      "true_label": "Home",
+      "category_set": [
+        "Home",
+        "Sports"
+      ],
+      "top_label": "Home",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.5778241116981411,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 6.24,
+      "abstained": false
     },
     {
       "product_id": 6,
-      "title": "L'Oreal Paris Revitalift Anti-Wrinkle Cream",
-      "description": "Moisturizing facial cream with collagen-boost formula for mature skin...",
+      "title": "Puma Walking Shoes with grippy support",
+      "true_label": "Shoes",
       "category_set": [
-        "Beauty",
         "Shoes",
-        "Clothing"
+        "Electronics"
       ],
+      "top_label": "Shoes",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "puma",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.5834788385259829,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 10.22,
+      "abstained": false
+    },
+    {
+      "product_id": 7,
+      "title": "Puma Running Shoes with cushioned support",
+      "true_label": "Shoes",
+      "category_set": [
+        "Shoes",
+        "Clothing",
+        "Sports"
+      ],
+      "top_label": "Shoes",
+      "covered": true,
+      "top1_correct": true,
       "set_size": 3,
       "attributes": {
-        "brand": "L'Oreal Paris",
+        "brand": "puma",
         "color": "unknown",
         "material": "unknown",
         "size": "unknown"
@@ -197,24 +289,30 @@
         "alpha": 0.3,
         "coverage_target": 0.7,
         "set_size": 3,
-        "confidence": 0.5,
+        "confidence": 0.4896193860104397,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
-        "llm_runtime": "LIVE",
+        "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1"
       },
-      "runtime_ms": 1673.1,
+      "runtime_ms": 1.19,
       "abstained": false
     },
     {
-      "product_id": 7,
-      "title": "Dyson V15 Detect Cordless Vacuum",
-      "description": "Lightweight stick vacuum with laser dust detection, 60-min battery, HEPA filter...",
-      "category_set": [],
-      "set_size": 0,
+      "product_id": 8,
+      "title": "Running Racket for active performance and fitness",
+      "true_label": "Sports",
+      "category_set": [
+        "Sports",
+        "Electronics"
+      ],
+      "top_label": "Sports",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
       "attributes": {
-        "brand": "Dyson",
+        "brand": "unknown",
         "color": "unknown",
         "material": "unknown",
         "size": "unknown"
@@ -222,52 +320,769 @@
       "reliability": {
         "alpha": 0.3,
         "coverage_target": 0.7,
-        "set_size": 0,
-        "confidence": 0.16666666666666669,
-        "abstained": true,
-        "reason": "Prediction set outside usability constraints",
-        "policy_action": "abstain",
-        "llm_runtime": "LIVE",
+        "set_size": 2,
+        "confidence": 0.6352238876495673,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1"
       },
-      "runtime_ms": 1038.37,
-      "abstained": true
+      "runtime_ms": 1.03,
+      "abstained": false
     },
     {
-      "product_id": 8,
-      "title": "Yonex Badminton Racket - Professional Grade",
-      "description": "Lightweight carbon composite frame, grip tape, strung with synthetic strings...",
-      "category_set": [],
-      "set_size": 0,
+      "product_id": 9,
+      "title": "calming Shampoo for daily skincare",
+      "true_label": "Beauty",
+      "category_set": [
+        "Beauty",
+        "Home"
+      ],
+      "top_label": "Beauty",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
       "attributes": {
-        "brand": "Yonex",
+        "brand": "unknown",
         "color": "unknown",
-        "material": "carbon composite",
+        "material": "unknown",
         "size": "unknown"
       },
       "reliability": {
         "alpha": 0.3,
         "coverage_target": 0.7,
-        "set_size": 0,
-        "confidence": 0.16666666666666669,
-        "abstained": true,
-        "reason": "Prediction set outside usability constraints",
-        "policy_action": "abstain",
-        "llm_runtime": "LIVE",
+        "set_size": 2,
+        "confidence": 0.5675100296747375,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1"
       },
-      "runtime_ms": 1110.41,
-      "abstained": true
+      "runtime_ms": 1.02,
+      "abstained": false
+    },
+    {
+      "product_id": 10,
+      "title": "Home&More Storage Box with practical multi-purpose",
+      "true_label": "Home",
+      "category_set": [
+        "Home",
+        "Electronics",
+        "Shoes"
+      ],
+      "top_label": "Home",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 3,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 3,
+        "confidence": 0.47962883504723347,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 8.15,
+      "abstained": false
+    },
+    {
+      "product_id": 11,
+      "title": "rich Shampoo for daily skincare",
+      "true_label": "Beauty",
+      "category_set": [
+        "Beauty",
+        "Home",
+        "Clothing"
+      ],
+      "top_label": "Beauty",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 3,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 3,
+        "confidence": 0.42468794182828046,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.09,
+      "abstained": false
+    },
+    {
+      "product_id": 12,
+      "title": "Decathlon Fitness Tracker with breathable design",
+      "true_label": "Sports",
+      "category_set": [
+        "Sports",
+        "Home"
+      ],
+      "top_label": "Sports",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.5629896996478495,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.08,
+      "abstained": false
+    },
+    {
+      "product_id": 13,
+      "title": "Tom Tailor Shirt with regular fit finish",
+      "true_label": "Clothing",
+      "category_set": [
+        "Clothing",
+        "Electronics",
+        "Beauty"
+      ],
+      "top_label": "Clothing",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 3,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 3,
+        "confidence": 0.3860132839747743,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.13,
+      "abstained": false
+    },
+    {
+      "product_id": 14,
+      "title": "sporty Training Shoes for daily comfort",
+      "true_label": "Shoes",
+      "category_set": [
+        "Shoes"
+      ],
+      "top_label": "Shoes",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 1,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 1,
+        "confidence": 0.737769822609563,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 11.7,
+      "abstained": false
+    },
+    {
+      "product_id": 15,
+      "title": "Sony Bluetooth Monitor",
+      "true_label": "Electronics",
+      "category_set": [
+        "Electronics",
+        "Sports"
+      ],
+      "top_label": "Electronics",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "blue",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.6350957526089742,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.32,
+      "abstained": false
+    },
+    {
+      "product_id": 16,
+      "title": "functional Coffee Mug Set for everyday home use",
+      "true_label": "Home",
+      "category_set": [
+        "Home",
+        "Clothing"
+      ],
+      "top_label": "Home",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.5756374334529396,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.06,
+      "abstained": false
+    },
+    {
+      "product_id": 17,
+      "title": "Puma Running Shoes with breathable support",
+      "true_label": "Shoes",
+      "category_set": [
+        "Shoes",
+        "Sports",
+        "Clothing"
+      ],
+      "top_label": "Shoes",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 3,
+      "attributes": {
+        "brand": "puma",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 3,
+        "confidence": 0.46114370830771967,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.08,
+      "abstained": false
+    },
+    {
+      "product_id": 18,
+      "title": "Babolat Yoga Mat with breathable design",
+      "true_label": "Sports",
+      "category_set": [
+        "Sports",
+        "Shoes"
+      ],
+      "top_label": "Sports",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.6001812225299202,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 8.04,
+      "abstained": false
+    },
+    {
+      "product_id": 19,
+      "title": "Dumbbell Set for active performance and fitness",
+      "true_label": "Sports",
+      "category_set": [
+        "Sports",
+        "Electronics"
+      ],
+      "top_label": "Sports",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.581626432768668,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.4,
+      "abstained": false
+    },
+    {
+      "product_id": 20,
+      "title": "Face Cream for radiant skin and comfort",
+      "true_label": "Beauty",
+      "category_set": [
+        "Beauty",
+        "Electronics"
+      ],
+      "top_label": "Beauty",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.6350011140877913,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 4.9,
+      "abstained": false
+    },
+    {
+      "product_id": 21,
+      "title": "Water Bottle for active performance and fitness",
+      "true_label": "Sports",
+      "category_set": [
+        "Sports"
+      ],
+      "top_label": "Sports",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 1,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 1,
+        "confidence": 0.6378956597629981,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.55,
+      "abstained": false
+    },
+    {
+      "product_id": 22,
+      "title": "Nike Slip-Ons for everyday use",
+      "true_label": "Shoes",
+      "category_set": [
+        "Shoes",
+        "Sports",
+        "Clothing"
+      ],
+      "top_label": "Shoes",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 3,
+      "attributes": {
+        "brand": "nike",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 3,
+        "confidence": 0.5157267704538417,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.19,
+      "abstained": false
+    },
+    {
+      "product_id": 23,
+      "title": "minimal Floor Lamp for everyday home use",
+      "true_label": "Home",
+      "category_set": [
+        "Home",
+        "Clothing",
+        "Electronics"
+      ],
+      "top_label": "Home",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 3,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 3,
+        "confidence": 0.5011288522052885,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 0.99,
+      "abstained": false
+    },
+    {
+      "product_id": 24,
+      "title": "Spa Gift Set",
+      "true_label": "Beauty",
+      "category_set": [
+        "Beauty",
+        "Home",
+        "Sports"
+      ],
+      "top_label": "Beauty",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 3,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 3,
+        "confidence": 0.34641550267619114,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 0.94,
+      "abstained": false
+    },
+    {
+      "product_id": 25,
+      "title": "CeraVe Mascara with modern styling",
+      "true_label": "Beauty",
+      "category_set": [
+        "Beauty",
+        "Home"
+      ],
+      "top_label": "Beauty",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.6183307710234923,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 0.94,
+      "abstained": false
+    },
+    {
+      "product_id": 26,
+      "title": "Sony mini Wireless Headphones",
+      "true_label": "Electronics",
+      "category_set": [
+        "Electronics",
+        "Home"
+      ],
+      "top_label": "Electronics",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.5630236249071985,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 20.52,
+      "abstained": false
+    },
+    {
+      "product_id": 27,
+      "title": "Jeans in classic Grau style",
+      "true_label": "Clothing",
+      "category_set": [
+        "Clothing"
+      ],
+      "top_label": "Clothing",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 1,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 1,
+        "confidence": 0.6729673925576961,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 5.0,
+      "abstained": false
+    },
+    {
+      "product_id": 28,
+      "title": "JBL intelligent Wireless Headphones energy-saving",
+      "true_label": "Electronics",
+      "category_set": [
+        "Electronics"
+      ],
+      "top_label": "Electronics",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 1,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 1,
+        "confidence": 0.6583700396448608,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.51,
+      "abstained": false
+    },
+    {
+      "product_id": 29,
+      "title": "classic Leggings for everyday wear",
+      "true_label": "Clothing",
+      "category_set": [
+        "Clothing"
+      ],
+      "top_label": "Clothing",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 1,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 1,
+        "confidence": 0.730863423857075,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.35,
+      "abstained": false
+    },
+    {
+      "product_id": 30,
+      "title": "Philips Storage Box with practical easy-clean",
+      "true_label": "Home",
+      "category_set": [
+        "Home",
+        "Electronics"
+      ],
+      "top_label": "Home",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 2,
+        "confidence": 0.5321698705349399,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.24,
+      "abstained": false
+    },
+    {
+      "product_id": 31,
+      "title": "Sony sleek Bluetooth Speaker mini",
+      "true_label": "Electronics",
+      "category_set": [
+        "Electronics"
+      ],
+      "top_label": "Electronics",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 1,
+      "attributes": {
+        "brand": "unknown",
+        "color": "blue",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.3,
+        "coverage_target": 0.7,
+        "set_size": 1,
+        "confidence": 0.666053838695884,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1"
+      },
+      "runtime_ms": 1.25,
+      "abstained": false
     }
   ],
   "metrics": {
-    "avg_set_size": 1.0,
+    "target_coverage": 0.7,
+    "calibrated_cumulative_threshold": 0.6376,
+    "empirical_coverage": 1.0,
+    "selective_coverage": 1.0,
+    "top1_accuracy": 1.0,
+    "avg_set_size": 2.0,
+    "avg_non_abstained_set_size": 2.0,
     "max_set_size": 3,
-    "min_set_size": 0,
-    "abstention_count": 5,
-    "abstention_rate": 0.62,
-    "avg_runtime_ms": 1796.08,
-    "max_runtime_ms": 2759.23
+    "min_set_size": 1,
+    "abstention_count": 0,
+    "abstention_rate": 0.0,
+    "avg_runtime_ms": 3.29,
+    "max_runtime_ms": 20.52
   }
 }
 ```

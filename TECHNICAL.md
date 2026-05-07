@@ -33,8 +33,8 @@ flowchart LR
   UI --> P[ReliabilityPipeline\nreliable_genai/pipeline.py]
   UI --> D[Diagnostics Endpoint\nGET /diagnostics]
 
-  P --> C[Keyword Baseline Classifier]
-  P --> S[Conformal Set Builder\nalpha / max set size]
+  P --> C[TF-IDF Classifier\nkeyword fallback]
+  P --> S[Calibrated Set Builder\nalpha / max set size]
   P --> L[GitHub Models Client\nazure-ai-inference]
 
   C --> M[Category Set]
@@ -65,8 +65,8 @@ flowchart LR
 
 ## 4) Request Flow
 1. The browser submits a product title and description to `POST /predict`.
-2. `ReliabilityPipeline.predict()` creates a keyword-based category score vector.
-3. The set builder keeps labels until the cumulative probability crosses the configured `alpha` threshold.
+2. `ReliabilityPipeline.predict()` creates a category score vector from a TF-IDF + logistic regression classifier trained on the processed training split. If scikit-learn or data files are unavailable, it falls back to the keyword scorer.
+3. The set builder keeps labels until cumulative probability crosses the calibrated cumulative-mass threshold computed on the calibration split.
 4. `GitHubModelsClient.extract_attributes()` calls the model or falls back to a deterministic extractor.
 5. The response is validated through the Pydantic models in `reliable_genai/models.py`.
 6. The FastAPI route serializes the full response for the template.
@@ -80,11 +80,17 @@ flowchart LR
 - Passes runtime metadata and diagnostics into the Jinja template context.
 
 ### `reliable_genai/pipeline.py`
-- Creates the category prediction.
+- Creates the category prediction through the calibrated classifier or keyword fallback.
 - Applies the set-building logic.
 - Applies the abstention policy when the set is too large.
 - Calls the LLM wrapper.
 - Returns the final response object.
+
+### `reliable_genai/classifier.py`
+- Trains a TF-IDF + logistic regression classifier from `data/processed/train.json`.
+- Computes a conformal cumulative-mass threshold from `data/processed/calibration.json`.
+- Returns class probabilities for prediction-set construction.
+- Falls back cleanly when optional classifier dependencies or data are missing.
 
 ### `reliable_genai/llm_wrappers.py`
 - Connects to GitHub Models.
@@ -150,6 +156,7 @@ A good demo shows both:
 
 For implementation work, the most useful checks are:
 - `compileall` on the app and package modules,
+- `scripts/evaluate.py` with mock LLM mode for labeled coverage and set-size metrics,
 - a live `POST /predict` request with `USE_MOCK_LLM=false`,
 - and a `GET /diagnostics` request before the demo starts.
 
@@ -180,7 +187,7 @@ The project is intended to work with public or synthetic product data. The CSV c
 
 ## 12) Next Technical Enhancements
 Possible next steps if the project is extended:
-- replace the keyword classifier with an embedding-based classifier,
-- add a real calibration script,
+- replace the TF-IDF classifier with an embedding-based classifier,
+- persist trained model artifacts instead of fitting at startup,
 - add a small evaluation notebook or report,
 - and add a results dashboard for coverage and abstention metrics.
