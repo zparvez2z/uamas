@@ -7,3 +7,4 @@ python-dotenv>=1.0.1
 azure-ai-inference>=1.0.0b9
 azure-core>=1.30.2
 scikit-learn>=1.4.0
+pytest>=8.0.0

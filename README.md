@@ -27,6 +27,12 @@ USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload
 
 Open: http://127.0.0.1:8000
 
+## Checks
+```bash
+.venv/bin/python -m pytest
+USE_MOCK_LLM=true .venv/bin/python scripts/evaluate.py
+```
+
 ## Environment
 Required variables:
 - `GITHUB_MODELS_ENDPOINT`
