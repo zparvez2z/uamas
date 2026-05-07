@@ -1,114 +1,78 @@
 #!/usr/bin/env python3
-"""
-Evaluation harness for the UAMAS reliability pipeline.
-Tests the pipeline on diverse product inputs and collects metrics.
-"""
+"""Evaluate the reliability pipeline on labeled processed test data."""
 
-import sys
-import time
+from __future__ import annotations
+
 import json
 import os
-from pathlib import Path
+import sys
+import time
 from datetime import datetime
+from pathlib import Path
 
-# Add parent directory to path for imports
+from dotenv import load_dotenv
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from reliable_genai import ReliabilityPipeline, ProductInput
+from reliable_genai import ProductInput, ReliabilityPipeline
 
 
-def load_test_dataset():
-    """Return a curated set of test products covering different scenarios."""
-    return [
-        # Scenario 1: Clear electronics
-        ProductInput(
-            title="Samsung 65-inch 4K Smart TV",
-            description="Ultra HD television with HDR10+ support, 120Hz refresh rate, smart apps"
-        ),
-        # Scenario 2: Ambiguous/hybrid product
-        ProductInput(
-            title="Multi-function Instant Pot Duo",
-            description="Electric pressure cooker that also functions as slow cooker, rice cooker, steamer"
-        ),
-        # Scenario 3: Fashion/apparel (fewer attributes)
-        ProductInput(
-            title="Nike Air Max Running Shoes - Men's",
-            description="Lightweight cushioned running shoe with mesh upper, black and white colorway"
-        ),
-        # Scenario 4: Home goods
-        ProductInput(
-            title="IKEA Billy Bookcase - White",
-            description="5-shelf wooden bookcase, flat-pack assembly, dimensions 80x28x106 cm"
-        ),
-        # Scenario 5: Generic/vague (should test abstention)
-        ProductInput(
-            title="Thing",
-            description="A product"
-        ),
-        # Scenario 6: Beauty/personal care
-        ProductInput(
-            title="L'Oreal Paris Revitalift Anti-Wrinkle Cream",
-            description="Moisturizing facial cream with collagen-boost formula for mature skin"
-        ),
-        # Scenario 7: Kitchen appliances
-        ProductInput(
-            title="Dyson V15 Detect Cordless Vacuum",
-            description="Lightweight stick vacuum with laser dust detection, 60-min battery, HEPA filter"
-        ),
-        # Scenario 8: Sports equipment
-        ProductInput(
-            title="Yonex Badminton Racket - Professional Grade",
-            description="Lightweight carbon composite frame, grip tape, strung with synthetic strings"
-        ),
-    ]
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_TEST_PATH = PROJECT_ROOT / "data" / "processed" / "test.json"
 
 
-def run_evaluation(use_mock=False, alpha=None, max_set_size=None):
-    """
-    Run the pipeline on test dataset and collect metrics.
-    
-    Args:
-        use_mock: If True, uses mock LLM instead of live GitHub Models
-        alpha: Override confidence level (default from env)
-        max_set_size: Override max set size (default from env)
-    
-    Returns:
-        dict with aggregated results
-    """
-    print("[INFO] Initializing pipeline...")
-    
-    # Temporarily override environment for evaluation
+def load_labeled_dataset(path: Path = DEFAULT_TEST_PATH) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8") as handle:
+        rows = json.load(handle)
+    if not isinstance(rows, list):
+        raise ValueError(f"{path} must contain a JSON list")
+    return rows
+
+
+def run_evaluation(use_mock: bool = True, alpha: float | None = None, max_set_size: int | None = None) -> dict:
     if alpha is not None:
         os.environ["ALPHA"] = str(alpha)
     if max_set_size is not None:
         os.environ["MAX_SET_SIZE"] = str(max_set_size)
-    
-    pipeline = ReliabilityPipeline()
-    
-    # Override mock mode if requested
     if use_mock:
-        pipeline.llm_client.use_mock = True
-        print("[INFO] Using MOCK LLM mode")
-    else:
-        print("[INFO] Using LIVE GitHub Models")
-    
-    dataset = load_test_dataset()
+        os.environ["USE_MOCK_LLM"] = "true"
+
+    print("[INFO] Initializing pipeline...")
+    pipeline = ReliabilityPipeline()
+    classifier_mode = "tfidf_logreg_calibrated" if pipeline.classifier.is_ready else "keyword_fallback"
+    print(f"[INFO] Classifier mode: {classifier_mode}")
+    if pipeline.classifier.reason:
+        print(f"[INFO] Classifier fallback reason: {pipeline.classifier.reason}")
+    print(f"[INFO] LLM mode: {'MOCK' if pipeline.llm.use_mock else 'LIVE'}")
+
+    rows = load_labeled_dataset()
     results = []
-    
-    print(f"\n[INFO] Running evaluation on {len(dataset)} products...\n")
-    
-    for idx, product in enumerate(dataset, 1):
-        print(f"[{idx}/{len(dataset)}] Predicting: {product.title[:50]}...")
-        
+
+    print(f"\n[INFO] Running labeled evaluation on {len(rows)} products...\n")
+    for idx, row in enumerate(rows, 1):
+        product = ProductInput(
+            title=row["title"],
+            description=row.get("description", ""),
+        )
+        true_label = row["category"]
+        print(f"[{idx}/{len(rows)}] Predicting: {product.title[:56]}")
+
         start = time.time()
         response = pipeline.predict(product)
         elapsed = time.time() - start
-        
+
+        top_label = response.category_set[0] if response.category_set else None
+        covered = true_label in response.category_set
+        top1_correct = top_label == true_label
+
         result_entry = {
             "product_id": idx,
             "title": product.title,
-            "description": product.description[:80] + "...",
+            "true_label": true_label,
             "category_set": response.category_set,
+            "top_label": top_label,
+            "covered": covered,
+            "top1_correct": top1_correct,
             "set_size": len(response.category_set),
             "attributes": response.attributes.model_dump(),
             "reliability": response.reliability.model_dump(),
@@ -116,96 +80,123 @@ def run_evaluation(use_mock=False, alpha=None, max_set_size=None):
             "abstained": response.reliability.abstained,
         }
         results.append(result_entry)
-        
-        print(f"    → Set: {response.category_set} | Size: {len(response.category_set)} | Abstained: {response.reliability.abstained} | {elapsed:.3f}s")
-    
-    # Aggregate metrics
-    aggregated = {
+
+        print(
+            "    set="
+            f"{response.category_set} true={true_label} covered={covered} "
+            f"abstained={response.reliability.abstained} {elapsed:.3f}s"
+        )
+
+    non_abstained = [result for result in results if not result["abstained"]]
+    covered = sum(1 for result in results if result["covered"])
+    top1_correct = sum(1 for result in results if result["top1_correct"])
+    non_abstained_covered = sum(1 for result in non_abstained if result["covered"])
+
+    metrics = {
+        "target_coverage": round(1.0 - pipeline.alpha, 3),
+        "calibrated_cumulative_threshold": round(pipeline.classifier.coverage_threshold, 4),
+        "empirical_coverage": round(covered / len(results), 3),
+        "selective_coverage": round(non_abstained_covered / len(non_abstained), 3) if non_abstained else None,
+        "top1_accuracy": round(top1_correct / len(results), 3),
+        "avg_set_size": round(sum(result["set_size"] for result in results) / len(results), 2),
+        "avg_non_abstained_set_size": (
+            round(sum(result["set_size"] for result in non_abstained) / len(non_abstained), 2)
+            if non_abstained
+            else None
+        ),
+        "max_set_size": max(result["set_size"] for result in results),
+        "min_set_size": min(result["set_size"] for result in results),
+        "abstention_count": sum(1 for result in results if result["abstained"]),
+        "abstention_rate": round(sum(1 for result in results if result["abstained"]) / len(results), 3),
+        "avg_runtime_ms": round(sum(result["runtime_ms"] for result in results) / len(results), 2),
+        "max_runtime_ms": max(result["runtime_ms"] for result in results),
+    }
+
+    return {
         "timestamp": datetime.now().isoformat(),
         "total_products": len(results),
+        "classifier_mode": classifier_mode,
+        "classifier_ready": pipeline.classifier.is_ready,
+        "classifier_reason": pipeline.classifier.reason,
+        "llm_runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
         "results": results,
-        "metrics": {
-            "avg_set_size": round(sum(r["set_size"] for r in results) / len(results), 2),
-            "max_set_size": max(r["set_size"] for r in results),
-            "min_set_size": min(r["set_size"] for r in results),
-            "abstention_count": sum(1 for r in results if r["abstained"]),
-            "abstention_rate": round(sum(1 for r in results if r["abstained"]) / len(results), 2),
-            "avg_runtime_ms": round(sum(r["runtime_ms"] for r in results) / len(results), 2),
-            "max_runtime_ms": max(r["runtime_ms"] for r in results),
-        }
+        "metrics": metrics,
     }
-    
-    return aggregated
 
 
-def save_results(aggregated, output_path="reports/results.md"):
-    """Save aggregated results to markdown report."""
+def save_results(aggregated: dict, output_path: str = "reports/results.md") -> None:
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    
     metrics = aggregated["metrics"]
-    
-    with open(output_path, "w") as f:
-        f.write("# UAMAS Evaluation Results\n\n")
-        f.write(f"**Generated:** {aggregated['timestamp']}\n\n")
-        
-        f.write("## Summary Metrics\n\n")
-        f.write("| Metric | Value |\n")
-        f.write("|--------|-------|\n")
-        f.write(f"| Total Products Tested | {aggregated['total_products']} |\n")
-        f.write(f"| Avg Confidence Set Size | {metrics['avg_set_size']} |\n")
-        f.write(f"| Max Set Size | {metrics['max_set_size']} |\n")
-        f.write(f"| Min Set Size | {metrics['min_set_size']} |\n")
-        f.write(f"| Abstention Rate | {metrics['abstention_rate']*100:.1f}% ({metrics['abstention_count']} products) |\n")
-        f.write(f"| Avg Runtime | {metrics['avg_runtime_ms']:.0f}ms |\n")
-        f.write(f"| Max Runtime | {metrics['max_runtime_ms']:.0f}ms |\n\n")
-        
-        f.write("## Interpretation\n\n")
-        f.write("- **Confidence Set Size**: Smaller sets indicate higher confidence; larger sets indicate uncertainty\n")
-        f.write("- **Abstention Rate**: Products where the pipeline refused to predict (set too large or empty)\n")
-        f.write("- **Runtime**: Includes LLM API latency for attribute extraction\n\n")
-        
-        f.write("## Per-Product Results\n\n")
-        f.write("| # | Product | Set Size | Abstained | Runtime (ms) |\n")
-        f.write("|---|---------|----------|-----------|---------------|\n")
-        
-        for r in aggregated["results"]:
-            abstain_mark = "✓" if r["abstained"] else "—"
-            f.write(f"| {r['product_id']} | {r['title'][:40]} | {r['set_size']} | {abstain_mark} | {r['runtime_ms']} |\n")
-        
-        f.write("\n## Full JSON Results\n\n")
-        f.write("```json\n")
-        f.write(json.dumps(aggregated, indent=2))
-        f.write("\n```\n")
-    
+
+    with open(output_path, "w", encoding="utf-8") as handle:
+        handle.write("# UAMAS Evaluation Results\n\n")
+        handle.write(f"**Generated:** {aggregated['timestamp']}\n\n")
+        handle.write(f"**Classifier:** {aggregated['classifier_mode']}\n\n")
+        handle.write(f"**LLM Runtime:** {aggregated['llm_runtime_mode']}\n\n")
+
+        handle.write("## Summary Metrics\n\n")
+        handle.write("| Metric | Value |\n")
+        handle.write("|--------|-------|\n")
+        handle.write(f"| Total Products Tested | {aggregated['total_products']} |\n")
+        handle.write(f"| Target Coverage | {metrics['target_coverage']:.3f} |\n")
+        handle.write(f"| Calibrated Cumulative Threshold | {metrics['calibrated_cumulative_threshold']:.4f} |\n")
+        handle.write(f"| Empirical Coverage | {metrics['empirical_coverage']:.3f} |\n")
+        handle.write(f"| Selective Coverage | {metrics['selective_coverage']} |\n")
+        handle.write(f"| Top-1 Accuracy | {metrics['top1_accuracy']:.3f} |\n")
+        handle.write(f"| Avg Confidence Set Size | {metrics['avg_set_size']} |\n")
+        handle.write(f"| Avg Non-Abstained Set Size | {metrics['avg_non_abstained_set_size']} |\n")
+        handle.write(f"| Abstention Rate | {metrics['abstention_rate'] * 100:.1f}% ({metrics['abstention_count']} products) |\n")
+        handle.write(f"| Avg Runtime | {metrics['avg_runtime_ms']:.0f}ms |\n")
+        handle.write(f"| Max Runtime | {metrics['max_runtime_ms']:.0f}ms |\n\n")
+
+        handle.write("## Interpretation\n\n")
+        handle.write("- **Empirical Coverage**: fraction of all test rows where the true label is in the returned set.\n")
+        handle.write("- **Selective Coverage**: coverage after abstentions are removed from the denominator.\n")
+        handle.write("- **Calibrated Cumulative Threshold**: cumulative probability mass needed to include labels after calibration.\n")
+        handle.write("- **Abstention Rate**: products where the policy refused to return a category set.\n\n")
+
+        handle.write("## Per-Product Results\n\n")
+        handle.write("| # | Product | True Label | Category Set | Covered | Abstained | Runtime (ms) |\n")
+        handle.write("|---|---------|------------|--------------|---------|-----------|--------------|\n")
+        for result in aggregated["results"]:
+            covered = "yes" if result["covered"] else "no"
+            abstained = "yes" if result["abstained"] else "no"
+            category_set = ", ".join(result["category_set"]) if result["category_set"] else "[]"
+            handle.write(
+                f"| {result['product_id']} | {result['title'][:40]} | {result['true_label']} | "
+                f"{category_set} | {covered} | {abstained} | {result['runtime_ms']} |\n"
+            )
+
+        handle.write("\n## Full JSON Results\n\n")
+        handle.write("```json\n")
+        handle.write(json.dumps(aggregated, indent=2))
+        handle.write("\n```\n")
+
     print(f"\n[INFO] Results saved to {output_path}")
 
 
 if __name__ == "__main__":
-    import os
-    from dotenv import load_dotenv
-    from pathlib import Path
-    
-    # Load environment from project root, overriding existing variables
-    project_root = Path(__file__).parent.parent
-    env_file = project_root / ".env"
+    env_file = PROJECT_ROOT / ".env"
     load_dotenv(dotenv_path=str(env_file), override=True)
-    
+
     try:
-        aggregated = run_evaluation()
-        save_results(aggregated)
-        
-        # Print summary to console
-        metrics = aggregated["metrics"]
-        print("\n" + "="*60)
+        aggregated_results = run_evaluation(use_mock=True)
+        save_results(aggregated_results)
+
+        summary = aggregated_results["metrics"]
+        print("\n" + "=" * 60)
         print("EVALUATION SUMMARY")
-        print("="*60)
-        print(f"Avg Set Size: {metrics['avg_set_size']}")
-        print(f"Abstention Rate: {metrics['abstention_rate']*100:.1f}%")
-        print(f"Avg Runtime: {metrics['avg_runtime_ms']:.0f}ms")
-        print("="*60)
-        
-    except Exception as e:
-        print(f"\n[ERROR] Evaluation failed: {e}")
+        print("=" * 60)
+        print(f"Target Coverage: {summary['target_coverage']:.3f}")
+        print(f"Empirical Coverage: {summary['empirical_coverage']:.3f}")
+        print(f"Selective Coverage: {summary['selective_coverage']}")
+        print(f"Top-1 Accuracy: {summary['top1_accuracy']:.3f}")
+        print(f"Avg Set Size: {summary['avg_set_size']}")
+        print(f"Abstention Rate: {summary['abstention_rate'] * 100:.1f}%")
+        print("=" * 60)
+    except Exception as exc:
+        print(f"\n[ERROR] Evaluation failed: {exc}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

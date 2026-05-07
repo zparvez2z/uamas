@@ -58,7 +58,7 @@ class GitHubModelsClient:
             except Exception:
                 continue
 
-            self.last_runtime = "FALLBACK_MOCK"
+        self.last_runtime = "FALLBACK_MOCK"
         return self._mock_extract(title, description)
 
     @staticmethod

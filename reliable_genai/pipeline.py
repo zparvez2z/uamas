@@ -1,6 +1,7 @@
 import os
 from typing import Dict, List
 
+from .classifier import CalibratedTextClassifier
 from .llm_wrappers import GitHubModelsClient
 from .models import ClassifierResult, PredictionResponse, ProductInput, ReliabilityMeta
 
@@ -31,6 +32,7 @@ class ReliabilityPipeline:
         self.max_set_size = int(os.getenv("MAX_SET_SIZE", "3"))
         self.enable_abstain = os.getenv("ENABLE_ABSTAIN", "true").lower() == "true"
         self.llm = GitHubModelsClient()
+        self.classifier = CalibratedTextClassifier(self.LABELS, self.alpha)
 
     def predict(self, item: ProductInput) -> PredictionResponse:
         classifier_result = self._classify(item)
@@ -67,6 +69,9 @@ class ReliabilityPipeline:
         )
 
     def _classify(self, item: ProductInput) -> ClassifierResult:
+        if self.classifier.is_ready:
+            return self.classifier.predict(item)
+
         text = f"{item.title} {item.description}".lower()
         scores = {label: 0.05 for label in self.LABELS}
 
@@ -81,8 +86,7 @@ class ReliabilityPipeline:
         return ClassifierResult(probabilities=probs, sorted_labels=sorted_labels)
 
     def _conformal_set(self, result: ClassifierResult) -> List[str]:
-        # Demo approximation: include labels while cumulative mass <= target coverage.
-        target = 1.0 - self.alpha
+        target = self.classifier.coverage_threshold if self.classifier.is_ready else 1.0 - self.alpha
         cumulative = 0.0
         selected: List[str] = []
 
