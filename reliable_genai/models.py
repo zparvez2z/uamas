@@ -25,6 +25,10 @@ class ReliabilityMeta(BaseModel):
     policy_action: str
     llm_runtime: str
     llm_model: str
+    classifier_runtime: str
+    classifier_reason: Optional[str] = None
+    classifier_artifact_path: Optional[str] = None
+    coverage_threshold: float
 
 
 class PredictionResponse(BaseModel):

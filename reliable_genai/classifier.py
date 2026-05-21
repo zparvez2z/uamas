@@ -38,6 +38,7 @@ class CalibratedTextClassifier:
         self.save_artifact = save_artifact
         self.coverage_threshold = 1.0 - alpha
         self.is_ready = False
+        self.runtime = "FALLBACK"
         self.reason: Optional[str] = None
         self._model = None
 
@@ -99,6 +100,7 @@ class CalibratedTextClassifier:
         )
         self.coverage_threshold = calibration.cumulative_threshold
         self.is_ready = True
+        self.runtime = "TRAINED"
         self.reason = None
         if self.save_artifact and self.artifact_path:
             self._save_artifact()
@@ -131,6 +133,7 @@ class CalibratedTextClassifier:
         self._model = artifact_model
         self.coverage_threshold = float(artifact_threshold)
         self.is_ready = True
+        self.runtime = "ARTIFACT"
         self.reason = None
         return True
 
@@ -191,3 +194,12 @@ class CalibratedTextClassifier:
         if os.getenv("DISABLE_CLASSIFIER_ARTIFACT", "false").lower() == "true":
             return None
         return DEFAULT_ARTIFACT_PATH
+
+    def diagnostics(self) -> dict[str, object]:
+        return {
+            "runtime": self.runtime,
+            "ready": self.is_ready,
+            "reason": self.reason,
+            "artifact_path": str(self.artifact_path) if self.artifact_path else None,
+            "coverage_threshold": self.coverage_threshold,
+        }

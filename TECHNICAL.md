@@ -131,6 +131,10 @@ The response includes:
 - `policy_action`
 - `llm_runtime`
 - `llm_model`
+- `classifier_runtime`
+- `classifier_reason`
+- `classifier_artifact_path`
+- `coverage_threshold`
 
 These fields make the behavior explainable during a review or demo and also support regression checks when the pipeline changes.
 
@@ -141,7 +145,11 @@ These fields make the behavior explainable during a review or demo and also supp
 - endpoint,
 - whether a token is present,
 - a masked token prefix,
-- and the last runtime path used by the pipeline.
+- the last runtime path used by the pipeline,
+- classifier runtime source (`ARTIFACT`, `TRAINED`, or `FALLBACK`),
+- classifier readiness and fallback reason,
+- classifier artifact path,
+- and the active calibrated coverage threshold.
 
 This is intended for quick pre-demo verification and for confirming whether a call hit live GitHub Models or the fallback path.
 

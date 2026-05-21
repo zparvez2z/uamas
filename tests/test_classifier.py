@@ -41,6 +41,7 @@ def test_classifier_trains_calibrates_and_predicts_probabilities(tmp_path: Path)
     result = classifier.predict(ProductInput(title="lightweight running shoe", description="grippy sole"))
 
     assert classifier.is_ready
+    assert classifier.runtime == "TRAINED"
     assert classifier.reason is None
     assert 0.0 < classifier.coverage_threshold <= 1.0
     assert set(result.probabilities) == {"Shoes", "Clothing"}
@@ -58,6 +59,7 @@ def test_classifier_falls_back_when_dataset_is_missing(tmp_path: Path) -> None:
     )
 
     assert not classifier.is_ready
+    assert classifier.runtime == "FALLBACK"
     assert classifier.coverage_threshold == pytest.approx(0.8)
     assert classifier.reason is not None
     assert "dataset unavailable" in classifier.reason
@@ -114,6 +116,7 @@ def test_classifier_artifact_round_trip_preserves_predictions(tmp_path: Path) ->
 
     assert artifact_path.exists()
     assert loaded.is_ready
+    assert loaded.runtime == "ARTIFACT"
     assert loaded.coverage_threshold == pytest.approx(trained.coverage_threshold)
     assert loaded.predict(item).probabilities == pytest.approx(trained.predict(item).probabilities)
 
@@ -147,7 +150,25 @@ def test_pipeline_loads_classifier_artifact(monkeypatch, tmp_path: Path) -> None
     pipeline = ReliabilityPipeline()
 
     assert pipeline.classifier.is_ready
+    assert pipeline.classifier.runtime == "ARTIFACT"
     assert pipeline.classifier.artifact_path == artifact_path
+
+
+def test_classifier_diagnostics_report_fallback_reason(tmp_path: Path) -> None:
+    classifier = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.2,
+        train_path=tmp_path / "missing-train.json",
+        calibration_path=tmp_path / "missing-calibration.json",
+        prefer_artifact=False,
+    )
+
+    diagnostics = classifier.diagnostics()
+
+    assert diagnostics["runtime"] == "FALLBACK"
+    assert diagnostics["ready"] is False
+    assert diagnostics["reason"] == classifier.reason
+    assert diagnostics["coverage_threshold"] == pytest.approx(0.8)
 
 
 def test_calibration_computes_cumulative_threshold() -> None:

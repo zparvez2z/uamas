@@ -8,6 +8,16 @@ class FakeClassifier:
     reason = None
     coverage_threshold = 0.7
 
+    @staticmethod
+    def diagnostics():
+        return {
+            "runtime": "TRAINED",
+            "ready": True,
+            "reason": None,
+            "artifact_path": None,
+            "coverage_threshold": 0.7,
+        }
+
 
 class FakeLLM:
     use_mock = True
@@ -39,6 +49,10 @@ class FakePipeline:
                 policy_action="abstain" if not category_set else "set_output",
                 llm_runtime="MOCK",
                 llm_model="test-model",
+                classifier_runtime="TRAINED",
+                classifier_reason=None,
+                classifier_artifact_path=None,
+                coverage_threshold=0.7,
             ),
         )
 
@@ -56,6 +70,8 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     metrics = aggregated["metrics"]
 
     assert aggregated["classifier_mode"] == "tfidf_logreg_calibrated"
+    assert aggregated["classifier_runtime"] == "TRAINED"
+    assert aggregated["coverage_threshold"] == 0.7
     assert aggregated["llm_runtime_mode"] == "MOCK"
     assert metrics["target_coverage"] == 0.7
     assert metrics["calibrated_cumulative_threshold"] == 0.7

@@ -38,6 +38,7 @@ class ReliabilityPipeline:
     def predict(self, item: ProductInput) -> PredictionResponse:
         classifier_result = self._classify(item)
         category_set = self._conformal_set(classifier_result)
+        classifier_diagnostics = self.classifier.diagnostics()
         policy = apply_abstention_policy(
             category_set=category_set,
             max_set_size=self.max_set_size,
@@ -56,6 +57,10 @@ class ReliabilityPipeline:
             policy_action=policy.action,
             llm_runtime=self.llm.last_runtime,
             llm_model=self.llm.model,
+            classifier_runtime=str(classifier_diagnostics["runtime"]),
+            classifier_reason=classifier_diagnostics["reason"],
+            classifier_artifact_path=classifier_diagnostics["artifact_path"],
+            coverage_threshold=float(classifier_diagnostics["coverage_threshold"]),
         )
 
         return PredictionResponse(

@@ -23,6 +23,10 @@
           <div><span>Last runtime</span><strong>{{ diagnostics.last_runtime }}</strong></div>
           <div><span>Token present</span><strong>{{ "Yes" if diagnostics.token_present else "No" }}</strong></div>
           <div><span>Endpoint</span><strong>{{ diagnostics.endpoint }}</strong></div>
+          <div><span>Classifier</span><strong>{{ diagnostics.classifier_runtime }}</strong></div>
+          <div><span>Threshold</span><strong>{{ "%.4f"|format(diagnostics.coverage_threshold) }}</strong></div>
+          <div><span>Classifier ready</span><strong>{{ "Yes" if diagnostics.classifier_ready else "No" }}</strong></div>
+          <div><span>Artifact</span><strong>{{ diagnostics.classifier_artifact_path or "None" }}</strong></div>
         </div>
       </div>
 

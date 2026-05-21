@@ -40,8 +40,10 @@ def run_evaluation(use_mock: bool = True, alpha: float | None = None, max_set_si
 
     print("[INFO] Initializing pipeline...")
     pipeline = ReliabilityPipeline()
+    classifier_diagnostics = pipeline.classifier.diagnostics()
     classifier_mode = "tfidf_logreg_calibrated" if pipeline.classifier.is_ready else "keyword_fallback"
     print(f"[INFO] Classifier mode: {classifier_mode}")
+    print(f"[INFO] Classifier runtime: {classifier_diagnostics['runtime']}")
     if pipeline.classifier.reason:
         print(f"[INFO] Classifier fallback reason: {pipeline.classifier.reason}")
     print(f"[INFO] LLM mode: {'MOCK' if pipeline.llm.use_mock else 'LIVE'}")
@@ -100,6 +102,9 @@ def run_evaluation(use_mock: bool = True, alpha: float | None = None, max_set_si
         "classifier_mode": classifier_mode,
         "classifier_ready": pipeline.classifier.is_ready,
         "classifier_reason": pipeline.classifier.reason,
+        "classifier_runtime": classifier_diagnostics["runtime"],
+        "classifier_artifact_path": classifier_diagnostics["artifact_path"],
+        "coverage_threshold": classifier_diagnostics["coverage_threshold"],
         "llm_runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
         "results": results,
         "metrics": metrics,
@@ -114,6 +119,7 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
         handle.write("# UAMAS Evaluation Results\n\n")
         handle.write(f"**Generated:** {aggregated['timestamp']}\n\n")
         handle.write(f"**Classifier:** {aggregated['classifier_mode']}\n\n")
+        handle.write(f"**Classifier Runtime:** {aggregated['classifier_runtime']}\n\n")
         handle.write(f"**LLM Runtime:** {aggregated['llm_runtime_mode']}\n\n")
 
         handle.write("## Summary Metrics\n\n")

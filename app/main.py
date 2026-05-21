@@ -21,6 +21,7 @@ pipeline = ReliabilityPipeline()
 
 def build_diagnostics() -> dict:
     token = os.getenv("GITHUB_TOKEN", "")
+    classifier_diagnostics = pipeline.classifier.diagnostics()
     return {
         "status": "ok",
         "runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
@@ -29,6 +30,11 @@ def build_diagnostics() -> dict:
         "token_present": bool(token),
         "token_prefix": token[:8] + "..." if token else None,
         "last_runtime": pipeline.llm.last_runtime,
+        "classifier_runtime": classifier_diagnostics["runtime"],
+        "classifier_ready": classifier_diagnostics["ready"],
+        "classifier_reason": classifier_diagnostics["reason"],
+        "classifier_artifact_path": classifier_diagnostics["artifact_path"],
+        "coverage_threshold": classifier_diagnostics["coverage_threshold"],
     }
 
 
