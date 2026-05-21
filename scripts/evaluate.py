@@ -7,6 +7,8 @@ import json
 import os
 import sys
 import time
+import argparse
+import copy
 from datetime import datetime
 from pathlib import Path
 
@@ -30,7 +32,26 @@ def load_labeled_dataset(path: Path = DEFAULT_TEST_PATH) -> list[dict[str, str]]
     return rows
 
 
-def run_evaluation(use_mock: bool = True, alpha: float | None = None, max_set_size: int | None = None) -> dict:
+DETERMINISTIC_TIMESTAMP = "deterministic"
+
+
+def display_path(path: object, deterministic: bool) -> object:
+    if not deterministic or not path:
+        return path
+
+    candidate = Path(str(path))
+    try:
+        return str(candidate.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(candidate)
+
+
+def run_evaluation(
+    use_mock: bool = True,
+    alpha: float | None = None,
+    max_set_size: int | None = None,
+    include_runtime: bool = False,
+) -> dict:
     if alpha is not None:
         os.environ["ALPHA"] = str(alpha)
     if max_set_size is not None:
@@ -63,10 +84,16 @@ def run_evaluation(use_mock: bool = True, alpha: float | None = None, max_set_si
         start = time.time()
         response = pipeline.predict(product)
         elapsed = time.time() - start
+        runtime_ms = round(elapsed * 1000, 2) if include_runtime else 0.0
 
         top_label = response.category_set[0] if response.category_set else None
         covered = true_label in response.category_set
         top1_correct = top_label == true_label
+        reliability = response.reliability.model_dump()
+        reliability["classifier_artifact_path"] = display_path(
+            reliability.get("classifier_artifact_path"),
+            deterministic=not include_runtime,
+        )
 
         result_entry = {
             "product_id": idx,
@@ -78,8 +105,8 @@ def run_evaluation(use_mock: bool = True, alpha: float | None = None, max_set_si
             "top1_correct": top1_correct,
             "set_size": len(response.category_set),
             "attributes": response.attributes.model_dump(),
-            "reliability": response.reliability.model_dump(),
-            "runtime_ms": round(elapsed * 1000, 2),
+            "reliability": reliability,
+            "runtime_ms": runtime_ms,
             "abstained": response.reliability.abstained,
         }
         results.append(result_entry)
@@ -87,7 +114,8 @@ def run_evaluation(use_mock: bool = True, alpha: float | None = None, max_set_si
         print(
             "    set="
             f"{response.category_set} true={true_label} covered={covered} "
-            f"abstained={response.reliability.abstained} {elapsed:.3f}s"
+            f"abstained={response.reliability.abstained}"
+            + (f" {elapsed:.3f}s" if include_runtime else "")
         )
 
     metrics = compute_metrics(
@@ -97,23 +125,34 @@ def run_evaluation(use_mock: bool = True, alpha: float | None = None, max_set_si
     ).model_dump()
 
     return {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now().isoformat() if include_runtime else DETERMINISTIC_TIMESTAMP,
         "total_products": len(results),
         "classifier_mode": classifier_mode,
         "classifier_ready": pipeline.classifier.is_ready,
         "classifier_reason": pipeline.classifier.reason,
         "classifier_runtime": classifier_diagnostics["runtime"],
-        "classifier_artifact_path": classifier_diagnostics["artifact_path"],
+        "classifier_artifact_path": display_path(
+            classifier_diagnostics["artifact_path"],
+            deterministic=not include_runtime,
+        ),
         "coverage_threshold": classifier_diagnostics["coverage_threshold"],
         "llm_runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
         "results": results,
         "metrics": metrics,
+        "include_runtime": include_runtime,
     }
 
 
 def save_results(aggregated: dict, output_path: str = "reports/results.md") -> None:
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     metrics = aggregated["metrics"]
+    include_runtime = bool(aggregated.get("include_runtime", True))
+    report_payload = copy.deepcopy(aggregated)
+    if not include_runtime:
+        report_payload["metrics"].pop("avg_runtime_ms", None)
+        report_payload["metrics"].pop("max_runtime_ms", None)
+        for result in report_payload["results"]:
+            result.pop("runtime_ms", None)
 
     with open(output_path, "w", encoding="utf-8") as handle:
         handle.write("# UAMAS Evaluation Results\n\n")
@@ -134,8 +173,10 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
         handle.write(f"| Avg Confidence Set Size | {metrics['avg_set_size']} |\n")
         handle.write(f"| Avg Non-Abstained Set Size | {metrics['avg_non_abstained_set_size']} |\n")
         handle.write(f"| Abstention Rate | {metrics['abstention_rate'] * 100:.1f}% ({metrics['abstention_count']} products) |\n")
-        handle.write(f"| Avg Runtime | {metrics['avg_runtime_ms']:.0f}ms |\n")
-        handle.write(f"| Max Runtime | {metrics['max_runtime_ms']:.0f}ms |\n\n")
+        if include_runtime:
+            handle.write(f"| Avg Runtime | {metrics['avg_runtime_ms']:.0f}ms |\n")
+            handle.write(f"| Max Runtime | {metrics['max_runtime_ms']:.0f}ms |\n")
+        handle.write("\n")
 
         handle.write("## Interpretation\n\n")
         handle.write("- **Empirical Coverage**: fraction of all test rows where the true label is in the returned set.\n")
@@ -144,20 +185,27 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
         handle.write("- **Abstention Rate**: products where the policy refused to return a category set.\n\n")
 
         handle.write("## Per-Product Results\n\n")
-        handle.write("| # | Product | True Label | Category Set | Covered | Abstained | Runtime (ms) |\n")
-        handle.write("|---|---------|------------|--------------|---------|-----------|--------------|\n")
+        if include_runtime:
+            handle.write("| # | Product | True Label | Category Set | Covered | Abstained | Runtime (ms) |\n")
+            handle.write("|---|---------|------------|--------------|---------|-----------|--------------|\n")
+        else:
+            handle.write("| # | Product | True Label | Category Set | Covered | Abstained |\n")
+            handle.write("|---|---------|------------|--------------|---------|-----------|\n")
         for result in aggregated["results"]:
             covered = "yes" if result["covered"] else "no"
             abstained = "yes" if result["abstained"] else "no"
             category_set = ", ".join(result["category_set"]) if result["category_set"] else "[]"
-            handle.write(
+            row = (
                 f"| {result['product_id']} | {result['title'][:40]} | {result['true_label']} | "
-                f"{category_set} | {covered} | {abstained} | {result['runtime_ms']} |\n"
+                f"{category_set} | {covered} | {abstained}"
             )
+            if include_runtime:
+                row += f" | {result['runtime_ms']}"
+            handle.write(f"{row} |\n")
 
         handle.write("\n## Full JSON Results\n\n")
         handle.write("```json\n")
-        handle.write(json.dumps(aggregated, indent=2))
+        handle.write(json.dumps(report_payload, indent=2))
         handle.write("\n```\n")
 
     print(f"\n[INFO] Results saved to {output_path}")
@@ -166,10 +214,14 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
 if __name__ == "__main__":
     env_file = PROJECT_ROOT / ".env"
     load_dotenv(dotenv_path=str(env_file), override=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--include-runtime", action="store_true", help="Include wall-clock timing in saved results")
+    parser.add_argument("--output", default="reports/results.md", help="Markdown report output path")
+    args = parser.parse_args()
 
     try:
-        aggregated_results = run_evaluation(use_mock=True)
-        save_results(aggregated_results)
+        aggregated_results = run_evaluation(use_mock=True, include_runtime=args.include_runtime)
+        save_results(aggregated_results, output_path=args.output)
 
         summary = aggregated_results["metrics"]
         print("\n" + "=" * 60)

@@ -32,6 +32,8 @@ Open: http://127.0.0.1:8000
 .venv/bin/python scripts/train_classifier.py --force
 .venv/bin/python -m pytest
 USE_MOCK_LLM=true .venv/bin/python scripts/evaluate.py
+# Optional timing run:
+USE_MOCK_LLM=true .venv/bin/python scripts/evaluate.py --include-runtime --output /tmp/uamas-results.md
 ```
 
 ## Environment

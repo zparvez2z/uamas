@@ -69,6 +69,8 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     aggregated = evaluate.run_evaluation(use_mock=True)
     metrics = aggregated["metrics"]
 
+    assert aggregated["timestamp"] == "deterministic"
+    assert aggregated["include_runtime"] is False
     assert aggregated["classifier_mode"] == "tfidf_logreg_calibrated"
     assert aggregated["classifier_runtime"] == "TRAINED"
     assert aggregated["coverage_threshold"] == 0.7
@@ -82,6 +84,29 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     assert metrics["avg_non_abstained_set_size"] == 1.5
     assert metrics["abstention_count"] == 1
     assert metrics["abstention_rate"] == 0.333
+    assert metrics["avg_runtime_ms"] == 0.0
+
+
+def test_save_results_is_stable_without_runtime(monkeypatch, tmp_path) -> None:
+    rows = [
+        {"title": "shoe product", "description": "", "category": "Shoes"},
+    ]
+    monkeypatch.setattr(evaluate, "ReliabilityPipeline", FakePipeline)
+    monkeypatch.setattr(evaluate, "load_labeled_dataset", lambda: rows)
+
+    aggregated = evaluate.run_evaluation(use_mock=True)
+    first_path = tmp_path / "first.md"
+    second_path = tmp_path / "second.md"
+
+    evaluate.save_results(aggregated, output_path=str(first_path))
+    evaluate.save_results(aggregated, output_path=str(second_path))
+
+    report = first_path.read_text(encoding="utf-8")
+
+    assert report == second_path.read_text(encoding="utf-8")
+    assert "**Generated:** deterministic" in report
+    assert "Runtime (ms)" not in report
+    assert "avg_runtime_ms" not in report
 
 
 def test_compute_metrics_handles_selective_coverage() -> None:

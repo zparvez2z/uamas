@@ -1,8 +1,10 @@
 # UAMAS Evaluation Results
 
-**Generated:** 2026-05-07T23:50:40.061956
+**Generated:** deterministic
 
 **Classifier:** tfidf_logreg_calibrated
+
+**Classifier Runtime:** ARTIFACT
 
 **LLM Runtime:** MOCK
 
@@ -19,8 +21,6 @@
 | Avg Confidence Set Size | 2.0 |
 | Avg Non-Abstained Set Size | 2.0 |
 | Abstention Rate | 0.0% (0 products) |
-| Avg Runtime | 3ms |
-| Max Runtime | 21ms |
 
 ## Interpretation
 
@@ -31,49 +31,52 @@
 
 ## Per-Product Results
 
-| # | Product | True Label | Category Set | Covered | Abstained | Runtime (ms) |
-|---|---------|------------|--------------|---------|-----------|--------------|
-| 1 | soft T-Shirt for everyday wear | Clothing | Clothing | yes | no | 1.48 |
-| 2 | Philips Bluetooth Monitor | Electronics | Electronics, Home | yes | no | 1.25 |
-| 3 | JBL compact Vacuum smart | Electronics | Electronics | yes | no | 1.12 |
-| 4 | Nike Sweater in a practical design | Clothing | Clothing, Shoes | yes | no | 1.09 |
-| 5 | functional Laundry Basket for everyday h | Home | Home, Sports | yes | no | 6.24 |
-| 6 | Puma Walking Shoes with grippy support | Shoes | Shoes, Electronics | yes | no | 10.22 |
-| 7 | Puma Running Shoes with cushioned suppor | Shoes | Shoes, Clothing, Sports | yes | no | 1.19 |
-| 8 | Running Racket for active performance an | Sports | Sports, Electronics | yes | no | 1.03 |
-| 9 | calming Shampoo for daily skincare | Beauty | Beauty, Home | yes | no | 1.02 |
-| 10 | Home&More Storage Box with practical mul | Home | Home, Electronics, Shoes | yes | no | 8.15 |
-| 11 | rich Shampoo for daily skincare | Beauty | Beauty, Home, Clothing | yes | no | 1.09 |
-| 12 | Decathlon Fitness Tracker with breathabl | Sports | Sports, Home | yes | no | 1.08 |
-| 13 | Tom Tailor Shirt with regular fit finish | Clothing | Clothing, Electronics, Beauty | yes | no | 1.13 |
-| 14 | sporty Training Shoes for daily comfort | Shoes | Shoes | yes | no | 11.7 |
-| 15 | Sony Bluetooth Monitor | Electronics | Electronics, Sports | yes | no | 1.32 |
-| 16 | functional Coffee Mug Set for everyday h | Home | Home, Clothing | yes | no | 1.06 |
-| 17 | Puma Running Shoes with breathable suppo | Shoes | Shoes, Sports, Clothing | yes | no | 1.08 |
-| 18 | Babolat Yoga Mat with breathable design | Sports | Sports, Shoes | yes | no | 8.04 |
-| 19 | Dumbbell Set for active performance and  | Sports | Sports, Electronics | yes | no | 1.4 |
-| 20 | Face Cream for radiant skin and comfort | Beauty | Beauty, Electronics | yes | no | 4.9 |
-| 21 | Water Bottle for active performance and  | Sports | Sports | yes | no | 1.55 |
-| 22 | Nike Slip-Ons for everyday use | Shoes | Shoes, Sports, Clothing | yes | no | 1.19 |
-| 23 | minimal Floor Lamp for everyday home use | Home | Home, Clothing, Electronics | yes | no | 0.99 |
-| 24 | Spa Gift Set | Beauty | Beauty, Home, Sports | yes | no | 0.94 |
-| 25 | CeraVe Mascara with modern styling | Beauty | Beauty, Home | yes | no | 0.94 |
-| 26 | Sony mini Wireless Headphones | Electronics | Electronics, Home | yes | no | 20.52 |
-| 27 | Jeans in classic Grau style | Clothing | Clothing | yes | no | 5.0 |
-| 28 | JBL intelligent Wireless Headphones ener | Electronics | Electronics | yes | no | 1.51 |
-| 29 | classic Leggings for everyday wear | Clothing | Clothing | yes | no | 1.35 |
-| 30 | Philips Storage Box with practical easy- | Home | Home, Electronics | yes | no | 1.24 |
-| 31 | Sony sleek Bluetooth Speaker mini | Electronics | Electronics | yes | no | 1.25 |
+| # | Product | True Label | Category Set | Covered | Abstained |
+|---|---------|------------|--------------|---------|-----------|
+| 1 | soft T-Shirt for everyday wear | Clothing | Clothing | yes | no |
+| 2 | Philips Bluetooth Monitor | Electronics | Electronics, Home | yes | no |
+| 3 | JBL compact Vacuum smart | Electronics | Electronics | yes | no |
+| 4 | Nike Sweater in a practical design | Clothing | Clothing, Shoes | yes | no |
+| 5 | functional Laundry Basket for everyday h | Home | Home, Sports | yes | no |
+| 6 | Puma Walking Shoes with grippy support | Shoes | Shoes, Electronics | yes | no |
+| 7 | Puma Running Shoes with cushioned suppor | Shoes | Shoes, Clothing, Sports | yes | no |
+| 8 | Running Racket for active performance an | Sports | Sports, Electronics | yes | no |
+| 9 | calming Shampoo for daily skincare | Beauty | Beauty, Home | yes | no |
+| 10 | Home&More Storage Box with practical mul | Home | Home, Electronics, Shoes | yes | no |
+| 11 | rich Shampoo for daily skincare | Beauty | Beauty, Home, Clothing | yes | no |
+| 12 | Decathlon Fitness Tracker with breathabl | Sports | Sports, Home | yes | no |
+| 13 | Tom Tailor Shirt with regular fit finish | Clothing | Clothing, Electronics, Beauty | yes | no |
+| 14 | sporty Training Shoes for daily comfort | Shoes | Shoes | yes | no |
+| 15 | Sony Bluetooth Monitor | Electronics | Electronics, Sports | yes | no |
+| 16 | functional Coffee Mug Set for everyday h | Home | Home, Clothing | yes | no |
+| 17 | Puma Running Shoes with breathable suppo | Shoes | Shoes, Sports, Clothing | yes | no |
+| 18 | Babolat Yoga Mat with breathable design | Sports | Sports, Shoes | yes | no |
+| 19 | Dumbbell Set for active performance and  | Sports | Sports, Electronics | yes | no |
+| 20 | Face Cream for radiant skin and comfort | Beauty | Beauty, Electronics | yes | no |
+| 21 | Water Bottle for active performance and  | Sports | Sports | yes | no |
+| 22 | Nike Slip-Ons for everyday use | Shoes | Shoes, Sports, Clothing | yes | no |
+| 23 | minimal Floor Lamp for everyday home use | Home | Home, Clothing, Electronics | yes | no |
+| 24 | Spa Gift Set | Beauty | Beauty, Home, Sports | yes | no |
+| 25 | CeraVe Mascara with modern styling | Beauty | Beauty, Home | yes | no |
+| 26 | Sony mini Wireless Headphones | Electronics | Electronics, Home | yes | no |
+| 27 | Jeans in classic Grau style | Clothing | Clothing | yes | no |
+| 28 | JBL intelligent Wireless Headphones ener | Electronics | Electronics | yes | no |
+| 29 | classic Leggings for everyday wear | Clothing | Clothing | yes | no |
+| 30 | Philips Storage Box with practical easy- | Home | Home, Electronics | yes | no |
+| 31 | Sony sleek Bluetooth Speaker mini | Electronics | Electronics | yes | no |
 
 ## Full JSON Results
 
 ```json
 {
-  "timestamp": "2026-05-07T23:50:40.061956",
+  "timestamp": "deterministic",
   "total_products": 31,
   "classifier_mode": "tfidf_logreg_calibrated",
   "classifier_ready": true,
   "classifier_reason": null,
+  "classifier_runtime": "ARTIFACT",
+  "classifier_artifact_path": "artifacts/classifier.joblib",
+  "coverage_threshold": 0.6376491214016037,
   "llm_runtime_mode": "MOCK",
   "results": [
     {
@@ -102,9 +105,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.48,
       "abstained": false
     },
     {
@@ -134,9 +140,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.25,
       "abstained": false
     },
     {
@@ -165,9 +174,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.12,
       "abstained": false
     },
     {
@@ -197,9 +209,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.09,
       "abstained": false
     },
     {
@@ -229,9 +244,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 6.24,
       "abstained": false
     },
     {
@@ -261,9 +279,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 10.22,
       "abstained": false
     },
     {
@@ -294,9 +315,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.19,
       "abstained": false
     },
     {
@@ -326,9 +350,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.03,
       "abstained": false
     },
     {
@@ -358,9 +385,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.02,
       "abstained": false
     },
     {
@@ -391,9 +421,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 8.15,
       "abstained": false
     },
     {
@@ -424,9 +457,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.09,
       "abstained": false
     },
     {
@@ -456,9 +492,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.08,
       "abstained": false
     },
     {
@@ -489,9 +528,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.13,
       "abstained": false
     },
     {
@@ -520,9 +562,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 11.7,
       "abstained": false
     },
     {
@@ -552,9 +597,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.32,
       "abstained": false
     },
     {
@@ -584,9 +632,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.06,
       "abstained": false
     },
     {
@@ -617,9 +668,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.08,
       "abstained": false
     },
     {
@@ -649,9 +703,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 8.04,
       "abstained": false
     },
     {
@@ -681,9 +738,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.4,
       "abstained": false
     },
     {
@@ -713,9 +773,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 4.9,
       "abstained": false
     },
     {
@@ -744,9 +807,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.55,
       "abstained": false
     },
     {
@@ -777,9 +843,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.19,
       "abstained": false
     },
     {
@@ -810,9 +879,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 0.99,
       "abstained": false
     },
     {
@@ -843,9 +915,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 0.94,
       "abstained": false
     },
     {
@@ -875,9 +950,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 0.94,
       "abstained": false
     },
     {
@@ -907,9 +985,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 20.52,
       "abstained": false
     },
     {
@@ -938,9 +1019,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 5.0,
       "abstained": false
     },
     {
@@ -969,9 +1053,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.51,
       "abstained": false
     },
     {
@@ -1000,9 +1087,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.35,
       "abstained": false
     },
     {
@@ -1032,9 +1122,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.24,
       "abstained": false
     },
     {
@@ -1063,9 +1156,12 @@
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1"
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "ARTIFACT",
+        "classifier_reason": null,
+        "classifier_artifact_path": "artifacts/classifier.joblib",
+        "coverage_threshold": 0.6376491214016037
       },
-      "runtime_ms": 1.25,
       "abstained": false
     }
   ],
@@ -1080,9 +1176,8 @@
     "max_set_size": 3,
     "min_set_size": 1,
     "abstention_count": 0,
-    "abstention_rate": 0.0,
-    "avg_runtime_ms": 3.29,
-    "max_runtime_ms": 20.52
-  }
+    "abstention_rate": 0.0
+  },
+  "include_runtime": false
 }
 ```

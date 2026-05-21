@@ -182,7 +182,8 @@ A good demo shows both:
 For implementation work, the most useful checks are:
 - `compileall` on the app and package modules,
 - `scripts/train_classifier.py --force` to rebuild the classifier artifact,
-- `scripts/evaluate.py` with mock LLM mode for labeled coverage and set-size metrics,
+- `scripts/evaluate.py` with mock LLM mode for deterministic labeled coverage and set-size metrics,
+- `scripts/evaluate.py --include-runtime --output /tmp/uamas-results.md` when timing measurements are needed,
 - a live `POST /predict` request with `USE_MOCK_LLM=false`,
 - and a `GET /diagnostics` request before the demo starts.
 
