@@ -35,6 +35,7 @@ def test_classifier_trains_calibrates_and_predicts_probabilities(tmp_path: Path)
         alpha=0.3,
         train_path=train_path,
         calibration_path=calibration_path,
+        prefer_artifact=False,
     )
 
     result = classifier.predict(ProductInput(title="lightweight running shoe", description="grippy sole"))
@@ -53,6 +54,7 @@ def test_classifier_falls_back_when_dataset_is_missing(tmp_path: Path) -> None:
         alpha=0.2,
         train_path=tmp_path / "missing-train.json",
         calibration_path=tmp_path / "missing-calibration.json",
+        prefer_artifact=False,
     )
 
     assert not classifier.is_ready
@@ -73,6 +75,79 @@ def test_pipeline_set_builder_uses_calibrated_threshold() -> None:
     )
 
     assert pipeline._conformal_set(result) == ["A", "B"]
+
+
+def test_classifier_artifact_round_trip_preserves_predictions(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    train_rows = [
+        {"title": "running shoe trainer", "description": "shoe sneaker sole", "category": "Shoes"},
+        {"title": "trail running shoe", "description": "shoe grip", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt fabric apparel", "category": "Clothing"},
+        {"title": "denim jacket", "description": "clothing apparel", "category": "Clothing"},
+    ]
+    calibration_rows = [
+        {"title": "blue shoe", "description": "running sole", "category": "Shoes"},
+        {"title": "black shirt", "description": "cotton apparel", "category": "Clothing"},
+    ]
+    write_rows(train_path, train_rows)
+    write_rows(calibration_path, calibration_rows)
+
+    trained = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+    loaded = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=tmp_path / "missing-train.json",
+        calibration_path=tmp_path / "missing-calibration.json",
+        artifact_path=artifact_path,
+    )
+    item = ProductInput(title="lightweight running shoe", description="grippy sole")
+
+    assert artifact_path.exists()
+    assert loaded.is_ready
+    assert loaded.coverage_threshold == pytest.approx(trained.coverage_threshold)
+    assert loaded.predict(item).probabilities == pytest.approx(trained.predict(item).probabilities)
+
+
+def test_pipeline_loads_classifier_artifact(monkeypatch, tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "trail shoe", "description": "shoe grip", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+        {"title": "denim jacket", "description": "clothing apparel", "category": "Clothing"},
+    ]
+    write_rows(train_path, rows)
+    write_rows(calibration_path, rows)
+    CalibratedTextClassifier(
+        labels=ReliabilityPipeline.LABELS,
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+
+    monkeypatch.setenv("ALPHA", "0.3")
+    monkeypatch.setenv("USE_MOCK_LLM", "true")
+    monkeypatch.setenv("CLASSIFIER_ARTIFACT_PATH", str(artifact_path))
+
+    pipeline = ReliabilityPipeline()
+
+    assert pipeline.classifier.is_ready
+    assert pipeline.classifier.artifact_path == artifact_path
 
 
 def test_calibration_computes_cumulative_threshold() -> None:

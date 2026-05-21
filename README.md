@@ -29,6 +29,7 @@ Open: http://127.0.0.1:8000
 
 ## Checks
 ```bash
+.venv/bin/python scripts/train_classifier.py --force
 .venv/bin/python -m pytest
 USE_MOCK_LLM=true .venv/bin/python scripts/evaluate.py
 ```

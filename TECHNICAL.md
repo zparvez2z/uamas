@@ -88,8 +88,14 @@ flowchart LR
 
 ### `reliable_genai/classifier.py`
 - Trains a TF-IDF + logistic regression classifier from `data/processed/train.json`.
+- Loads `artifacts/classifier.joblib` when a compatible artifact is present.
+- Can persist a freshly trained classifier artifact for repeatable startup behavior.
 - Returns class probabilities for prediction-set construction.
 - Falls back cleanly when optional classifier dependencies or data are missing.
+
+### `scripts/train_classifier.py`
+- Rebuilds the classifier artifact from train and calibration splits.
+- Writes `artifacts/classifier.joblib` and a readable `artifacts/calibration.json` summary.
 
 ### `reliable_genai/calibration.py`
 - Computes conformal cumulative-mass calibration thresholds from labeled calibration rows.
@@ -167,6 +173,7 @@ A good demo shows both:
 
 For implementation work, the most useful checks are:
 - `compileall` on the app and package modules,
+- `scripts/train_classifier.py --force` to rebuild the classifier artifact,
 - `scripts/evaluate.py` with mock LLM mode for labeled coverage and set-size metrics,
 - a live `POST /predict` request with `USE_MOCK_LLM=false`,
 - and a `GET /diagnostics` request before the demo starts.
@@ -199,6 +206,6 @@ The project is intended to work with public or synthetic product data. The CSV c
 ## 12) Next Technical Enhancements
 Possible next steps if the project is extended:
 - replace the TF-IDF classifier with an embedding-based classifier,
-- persist trained model artifacts instead of fitting at startup,
+- version trained model artifacts with metadata if multiple classifiers are compared,
 - add a small evaluation notebook or report,
 - and add a results dashboard for coverage and abstention metrics.
