@@ -88,9 +88,20 @@ flowchart LR
 
 ### `reliable_genai/classifier.py`
 - Trains a TF-IDF + logistic regression classifier from `data/processed/train.json`.
-- Computes a conformal cumulative-mass threshold from `data/processed/calibration.json`.
 - Returns class probabilities for prediction-set construction.
 - Falls back cleanly when optional classifier dependencies or data are missing.
+
+### `reliable_genai/calibration.py`
+- Computes conformal cumulative-mass calibration thresholds from labeled calibration rows.
+- Keeps the calibration scoring logic independent of the classifier implementation.
+
+### `reliable_genai/scoring.py`
+- Builds prediction sets from calibrated probability maps.
+- Applies abstention policy decisions for oversized or empty category sets.
+
+### `reliable_genai/evaluation.py`
+- Computes coverage, selective coverage, top-1 accuracy, set size, abstention, and runtime metrics.
+- Keeps report metric calculations shared and directly testable.
 
 ### `reliable_genai/llm_wrappers.py`
 - Connects to GitHub Models.

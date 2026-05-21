@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from reliable_genai import ProductInput, ReliabilityPipeline
+from reliable_genai.evaluation import compute_metrics
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -87,30 +88,11 @@ def run_evaluation(use_mock: bool = True, alpha: float | None = None, max_set_si
             f"abstained={response.reliability.abstained} {elapsed:.3f}s"
         )
 
-    non_abstained = [result for result in results if not result["abstained"]]
-    covered = sum(1 for result in results if result["covered"])
-    top1_correct = sum(1 for result in results if result["top1_correct"])
-    non_abstained_covered = sum(1 for result in non_abstained if result["covered"])
-
-    metrics = {
-        "target_coverage": round(1.0 - pipeline.alpha, 3),
-        "calibrated_cumulative_threshold": round(pipeline.classifier.coverage_threshold, 4),
-        "empirical_coverage": round(covered / len(results), 3),
-        "selective_coverage": round(non_abstained_covered / len(non_abstained), 3) if non_abstained else None,
-        "top1_accuracy": round(top1_correct / len(results), 3),
-        "avg_set_size": round(sum(result["set_size"] for result in results) / len(results), 2),
-        "avg_non_abstained_set_size": (
-            round(sum(result["set_size"] for result in non_abstained) / len(non_abstained), 2)
-            if non_abstained
-            else None
-        ),
-        "max_set_size": max(result["set_size"] for result in results),
-        "min_set_size": min(result["set_size"] for result in results),
-        "abstention_count": sum(1 for result in results if result["abstained"]),
-        "abstention_rate": round(sum(1 for result in results if result["abstained"]) / len(results), 3),
-        "avg_runtime_ms": round(sum(result["runtime_ms"] for result in results) / len(results), 2),
-        "max_runtime_ms": max(result["runtime_ms"] for result in results),
-    }
+    metrics = compute_metrics(
+        results=results,
+        target_coverage=1.0 - pipeline.alpha,
+        calibrated_cumulative_threshold=pipeline.classifier.coverage_threshold,
+    ).model_dump()
 
     return {
         "timestamp": datetime.now().isoformat(),

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, Optional
 
+from .calibration import calibrate_cumulative_threshold
 from .models import ClassifierResult, ProductInput
 
 
@@ -79,29 +79,15 @@ class CalibratedTextClassifier:
             [self._text_from_row(row) for row in train_rows],
             [row["category"] for row in train_rows],
         )
-        self.coverage_threshold = self._calibrate(calibration_rows)
+        calibration = calibrate_cumulative_threshold(
+            rows=calibration_rows,
+            probability_fn=self._predict_probability_map,
+            text_fn=self._text_from_row,
+            alpha=self.alpha,
+        )
+        self.coverage_threshold = calibration.cumulative_threshold
         self.is_ready = True
         self.reason = None
-
-    def _calibrate(self, rows: list[dict[str, str]]) -> float:
-        probabilities = self._predict_probability_map([self._text_from_row(row) for row in rows])
-        scores: List[float] = []
-
-        for row, probability_map in zip(rows, probabilities):
-            true_label = row["category"]
-            cumulative = 0.0
-            for label in sorted(probability_map, key=lambda key: probability_map[key], reverse=True):
-                cumulative += probability_map[label]
-                if label == true_label:
-                    scores.append(cumulative)
-                    break
-
-        if not scores:
-            return 1.0 - self.alpha
-
-        scores.sort()
-        rank = min(math.ceil((len(scores) + 1) * (1.0 - self.alpha)), len(scores)) - 1
-        return scores[max(rank, 0)]
 
     def _predict_probability_map(self, texts: list[str]) -> list[dict[str, float]]:
         if self._model is None:

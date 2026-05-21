@@ -4,8 +4,10 @@ from pathlib import Path
 import pytest
 
 from reliable_genai.classifier import CalibratedTextClassifier
+from reliable_genai.calibration import calibrate_cumulative_threshold, cumulative_mass_for_label
 from reliable_genai.models import ClassifierResult, ProductInput
 from reliable_genai.pipeline import ReliabilityPipeline
+from reliable_genai.scoring import apply_abstention_policy, build_prediction_set
 
 
 def write_rows(path: Path, rows: list[dict[str, str]]) -> None:
@@ -71,3 +73,41 @@ def test_pipeline_set_builder_uses_calibrated_threshold() -> None:
     )
 
     assert pipeline._conformal_set(result) == ["A", "B"]
+
+
+def test_calibration_computes_cumulative_threshold() -> None:
+    rows = [
+        {"title": "a", "category": "A"},
+        {"title": "b", "category": "B"},
+    ]
+    probability_maps = [
+        {"A": 0.7, "B": 0.3},
+        {"A": 0.6, "B": 0.4},
+    ]
+
+    calibration = calibrate_cumulative_threshold(
+        rows=rows,
+        probability_fn=lambda texts: probability_maps,
+        text_fn=lambda row: row["title"],
+        alpha=0.5,
+    )
+
+    assert cumulative_mass_for_label(probability_maps[1], "B") == pytest.approx(1.0)
+    assert calibration.target_coverage == pytest.approx(0.5)
+    assert calibration.cumulative_threshold == pytest.approx(1.0)
+    assert calibration.sample_count == 2
+
+
+def test_scoring_helpers_build_sets_and_abstain() -> None:
+    result = ClassifierResult(
+        probabilities={"A": 0.45, "B": 0.35, "C": 0.2},
+        sorted_labels=["A", "B", "C"],
+    )
+
+    category_set = build_prediction_set(result, cumulative_threshold=0.75)
+    decision = apply_abstention_policy(category_set, max_set_size=1, enable_abstain=True)
+
+    assert category_set == ["A", "B"]
+    assert decision.category_set == []
+    assert decision.abstained
+    assert decision.action == "abstain"

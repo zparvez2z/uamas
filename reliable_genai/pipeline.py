@@ -4,6 +4,7 @@ from typing import Dict, List
 from .classifier import CalibratedTextClassifier
 from .llm_wrappers import GitHubModelsClient
 from .models import ClassifierResult, PredictionResponse, ProductInput, ReliabilityMeta
+from .scoring import apply_abstention_policy, build_prediction_set
 
 
 class ReliabilityPipeline:
@@ -37,33 +38,28 @@ class ReliabilityPipeline:
     def predict(self, item: ProductInput) -> PredictionResponse:
         classifier_result = self._classify(item)
         category_set = self._conformal_set(classifier_result)
-
-        abstained = False
-        reason = None
-        action = "set_output"
-
-        if self.enable_abstain and (len(category_set) == 0 or len(category_set) > self.max_set_size):
-            abstained = True
-            reason = "Prediction set outside usability constraints"
-            action = "abstain"
-            category_set = []
+        policy = apply_abstention_policy(
+            category_set=category_set,
+            max_set_size=self.max_set_size,
+            enable_abstain=self.enable_abstain,
+        )
 
         attributes = self.llm.extract_attributes(item.title, item.description)
 
         reliability = ReliabilityMeta(
             alpha=self.alpha,
             coverage_target=1.0 - self.alpha,
-            set_size=len(category_set),
+            set_size=len(policy.category_set),
             confidence=max(classifier_result.probabilities.values()),
-            abstained=abstained,
-            reason=reason,
-            policy_action=action,
+            abstained=policy.abstained,
+            reason=policy.reason,
+            policy_action=policy.action,
             llm_runtime=self.llm.last_runtime,
             llm_model=self.llm.model,
         )
 
         return PredictionResponse(
-            category_set=category_set,
+            category_set=policy.category_set,
             attributes=attributes,
             reliability=reliability,
         )
@@ -87,17 +83,4 @@ class ReliabilityPipeline:
 
     def _conformal_set(self, result: ClassifierResult) -> List[str]:
         target = self.classifier.coverage_threshold if self.classifier.is_ready else 1.0 - self.alpha
-        cumulative = 0.0
-        selected: List[str] = []
-
-        for label in result.sorted_labels:
-            selected.append(label)
-            cumulative += result.probabilities[label]
-            if cumulative >= target:
-                break
-
-        # Enforce a non-empty set in non-abstain mode.
-        if not selected and result.sorted_labels:
-            selected = [result.sorted_labels[0]]
-
-        return selected
+        return build_prediction_set(result, target)
