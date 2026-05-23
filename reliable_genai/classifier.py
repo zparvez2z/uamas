@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
+import platform
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -41,6 +44,7 @@ class CalibratedTextClassifier:
         self.runtime = "FALLBACK"
         self.reason: Optional[str] = None
         self._model = None
+        self.artifact_metadata: dict[str, object] = {}
 
         if prefer_artifact and self.artifact_path and self.artifact_path.exists() and self._load_artifact():
             return
@@ -123,6 +127,7 @@ class CalibratedTextClassifier:
         artifact_alpha = payload.get("alpha")
         artifact_model = payload.get("model")
         artifact_threshold = payload.get("coverage_threshold")
+        artifact_metadata = payload.get("metadata") or {}
         if artifact_labels != self.labels or artifact_model is None or artifact_threshold is None:
             self.reason = "classifier artifact is incompatible"
             return False
@@ -131,6 +136,7 @@ class CalibratedTextClassifier:
             return False
 
         self._model = artifact_model
+        self.artifact_metadata = artifact_metadata if isinstance(artifact_metadata, dict) else {}
         self.coverage_threshold = float(artifact_threshold)
         self.is_ready = True
         self.runtime = "ARTIFACT"
@@ -142,11 +148,15 @@ class CalibratedTextClassifier:
             return
 
         self.artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        train_rows = self._load_rows(self.train_path) if self.train_path.exists() else []
+        calibration_rows = self._load_rows(self.calibration_path) if self.calibration_path.exists() else []
+        self.artifact_metadata = self._build_artifact_metadata(train_rows, calibration_rows)
         joblib.dump(
             {
                 "labels": self.labels,
                 "alpha": self.alpha,
                 "coverage_threshold": self.coverage_threshold,
+                "metadata": self.artifact_metadata,
                 "model": self._model,
             },
             self.artifact_path,
@@ -202,4 +212,26 @@ class CalibratedTextClassifier:
             "reason": self.reason,
             "artifact_path": str(self.artifact_path) if self.artifact_path else None,
             "coverage_threshold": self.coverage_threshold,
+            "artifact_metadata": self.artifact_metadata,
+        }
+
+    @staticmethod
+    def _rows_digest(rows: list[dict[str, str]]) -> str:
+        normalized = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(normalized).hexdigest()
+
+    def _build_artifact_metadata(
+        self,
+        train_rows: list[dict[str, str]],
+        calibration_rows: list[dict[str, str]],
+    ) -> dict[str, object]:
+        return {
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "python_version": platform.python_version(),
+            "train_path": str(self.train_path),
+            "calibration_path": str(self.calibration_path),
+            "train_row_count": len(train_rows),
+            "calibration_row_count": len(calibration_rows),
+            "train_data_sha256": self._rows_digest(train_rows) if train_rows else None,
+            "calibration_data_sha256": self._rows_digest(calibration_rows) if calibration_rows else None,
         }
