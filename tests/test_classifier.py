@@ -171,6 +171,46 @@ def test_classifier_diagnostics_report_fallback_reason(tmp_path: Path) -> None:
     assert diagnostics["coverage_threshold"] == pytest.approx(0.8)
 
 
+
+def test_classifier_artifact_metadata_exposed_in_diagnostics(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    write_rows(train_path, rows)
+    write_rows(calibration_path, rows)
+
+    CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+
+    loaded = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=tmp_path / "missing-train.json",
+        calibration_path=tmp_path / "missing-calibration.json",
+        artifact_path=artifact_path,
+    )
+
+    diagnostics = loaded.diagnostics()
+    metadata = diagnostics["artifact_metadata"]
+
+    assert diagnostics["runtime"] == "ARTIFACT"
+    assert isinstance(metadata, dict)
+    assert metadata["train_row_count"] == 2
+    assert metadata["calibration_row_count"] == 2
+    assert metadata["train_data_sha256"]
+    assert metadata["calibration_data_sha256"]
+
 def test_calibration_computes_cumulative_threshold() -> None:
     rows = [
         {"title": "a", "category": "A"},

@@ -136,6 +136,7 @@ def run_evaluation(
             deterministic=not include_runtime,
         ),
         "coverage_threshold": classifier_diagnostics["coverage_threshold"],
+        "classifier_artifact_metadata": classifier_diagnostics.get("artifact_metadata", {}),
         "llm_runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
         "results": results,
         "metrics": metrics,
