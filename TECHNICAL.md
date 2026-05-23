@@ -153,6 +153,17 @@ These fields make the behavior explainable during a review or demo and also supp
 
 This is intended for quick pre-demo verification and for confirming whether a call hit live GitHub Models or the fallback path.
 
+Healthy live mode indicators:
+- `token_present: true`,
+- endpoint and selected model are populated,
+- `last_runtime` reports `LIVE` after a prediction,
+- classifier runtime is `ARTIFACT` or `TRAINED` with `classifier_ready: true`.
+
+Fallback interpretation:
+- `mode` can still be `LIVE` while `last_runtime` shows a fallback path for the latest call,
+- this usually indicates transient model/response issues rather than API misconfiguration,
+- record fallback frequency and reason in demo run notes.
+
 ## 8) Environment Variables
 Required:
 - `GITHUB_MODELS_ENDPOINT`

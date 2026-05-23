@@ -22,6 +22,18 @@
 | Avg Non-Abstained Set Size | 2.0 |
 | Abstention Rate | 0.0% (0 products) |
 
+
+## Live Validation Notes
+
+This report captures deterministic mock-evaluation output only (`LLM Runtime: MOCK`).
+
+Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and append:
+- validation date/time,
+- number of live prediction requests,
+- count of `LIVE` vs fallback runtime paths,
+- any abstentions and reasons,
+- latency observations for representative requests.
+
 ## Interpretation
 
 - **Empirical Coverage**: fraction of all test rows where the true label is in the returned set.
