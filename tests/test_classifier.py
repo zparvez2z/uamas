@@ -171,6 +171,110 @@ def test_classifier_diagnostics_report_fallback_reason(tmp_path: Path) -> None:
     assert diagnostics["coverage_threshold"] == pytest.approx(0.8)
 
 
+
+def test_classifier_artifact_metadata_exposed_in_diagnostics(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    write_rows(train_path, rows)
+    write_rows(calibration_path, rows)
+
+    CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+
+    loaded = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=tmp_path / "missing-train.json",
+        calibration_path=tmp_path / "missing-calibration.json",
+        artifact_path=artifact_path,
+    )
+
+    diagnostics = loaded.diagnostics()
+    metadata = diagnostics["artifact_metadata"]
+
+    assert diagnostics["runtime"] == "ARTIFACT"
+    assert isinstance(metadata, dict)
+    assert metadata["train_row_count"] == 2
+    assert metadata["calibration_row_count"] == 2
+    assert metadata["train_data_sha256"]
+    assert metadata["calibration_data_sha256"]
+
+def test_calibration_computes_cumulative_threshold() -> None:
+    rows = [
+        {"title": "a", "category": "A"},
+        {"title": "b", "category": "B"},
+    ]
+    probability_maps = [
+        {"A": 0.7, "B": 0.3},
+        {"A": 0.6, "B": 0.4},
+    ]
+
+    calibration = calibrate_cumulative_threshold(
+        rows=rows,
+        probability_fn=lambda texts: probability_maps,
+        text_fn=lambda row: row["title"],
+        alpha=0.5,
+    )
+
+    assert cumulative_mass_for_label(probability_maps[1], "B") == pytest.approx(1.0)
+    assert calibration.target_coverage == pytest.approx(0.5)
+    assert calibration.cumulative_threshold == pytest.approx(1.0)
+    assert calibration.sample_count == 2
+
+
+def test_scoring_helpers_build_sets_and_abstain() -> None:
+    result = ClassifierResult(
+        probabilities={"A": 0.45, "B": 0.35, "C": 0.2},
+        sorted_labels=["A", "B", "C"],
+    )
+
+    category_set = build_prediction_set(result, cumulative_threshold=0.75)
+    decision = apply_abstention_policy(category_set, max_set_size=1, enable_abstain=True)
+
+    assert category_set == ["A", "B"]
+    assert decision.category_set == []
+    assert decision.abstained
+    assert decision.action == "abstain"
+
+
+def test_classifier_strict_metadata_validation_detects_mismatch(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    write_rows(train_path, rows)
+    write_rows(calibration_path, rows)
+
+    classifier = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        prefer_artifact=False,
+    )
+
+    incompatible_metadata = classifier._build_artifact_metadata(rows + [{"title": "extra", "description": "x", "category": "Shoes"}], rows)
+    compatible, reason = classifier._validate_artifact_metadata(incompatible_metadata)
+
+    assert compatible is False
+    assert reason is not None
+    assert "train" in reason
+
+
 def test_calibration_computes_cumulative_threshold() -> None:
     rows = [
         {"title": "a", "category": "A"},
