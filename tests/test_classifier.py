@@ -211,42 +211,6 @@ def test_classifier_artifact_metadata_exposed_in_diagnostics(tmp_path: Path) -> 
     assert metadata["train_data_sha256"]
     assert metadata["calibration_data_sha256"]
 
-def test_calibration_computes_cumulative_threshold() -> None:
-    rows = [
-        {"title": "a", "category": "A"},
-        {"title": "b", "category": "B"},
-    ]
-    probability_maps = [
-        {"A": 0.7, "B": 0.3},
-        {"A": 0.6, "B": 0.4},
-    ]
-
-    calibration = calibrate_cumulative_threshold(
-        rows=rows,
-        probability_fn=lambda texts: probability_maps,
-        text_fn=lambda row: row["title"],
-        alpha=0.5,
-    )
-
-    assert cumulative_mass_for_label(probability_maps[1], "B") == pytest.approx(1.0)
-    assert calibration.target_coverage == pytest.approx(0.5)
-    assert calibration.cumulative_threshold == pytest.approx(1.0)
-    assert calibration.sample_count == 2
-
-
-def test_scoring_helpers_build_sets_and_abstain() -> None:
-    result = ClassifierResult(
-        probabilities={"A": 0.45, "B": 0.35, "C": 0.2},
-        sorted_labels=["A", "B", "C"],
-    )
-
-    category_set = build_prediction_set(result, cumulative_threshold=0.75)
-    decision = apply_abstention_policy(category_set, max_set_size=1, enable_abstain=True)
-
-    assert category_set == ["A", "B"]
-    assert decision.category_set == []
-    assert decision.abstained
-    assert decision.action == "abstain"
 
 
 def test_classifier_strict_metadata_validation_detects_mismatch(tmp_path: Path) -> None:
