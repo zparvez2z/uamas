@@ -45,6 +45,7 @@ class CalibratedTextClassifier:
         self.reason: Optional[str] = None
         self._model = None
         self.artifact_metadata: dict[str, object] = {}
+        self.strict_artifact_metadata = os.getenv("STRICT_ARTIFACT_METADATA", "false").lower() == "true"
 
         if prefer_artifact and self.artifact_path and self.artifact_path.exists() and self._load_artifact():
             return
@@ -134,6 +135,11 @@ class CalibratedTextClassifier:
         if artifact_alpha is not None and abs(float(artifact_alpha) - self.alpha) > 1e-12:
             self.reason = "classifier artifact alpha does not match runtime alpha"
             return False
+        if self.strict_artifact_metadata:
+            compatible, reason = self._validate_artifact_metadata(artifact_metadata)
+            if not compatible:
+                self.reason = reason
+                return False
 
         self._model = artifact_model
         self.artifact_metadata = artifact_metadata if isinstance(artifact_metadata, dict) else {}
@@ -204,6 +210,33 @@ class CalibratedTextClassifier:
         if os.getenv("DISABLE_CLASSIFIER_ARTIFACT", "false").lower() == "true":
             return None
         return DEFAULT_ARTIFACT_PATH
+
+
+    def _validate_artifact_metadata(self, artifact_metadata: object) -> tuple[bool, str | None]:
+        if not isinstance(artifact_metadata, dict):
+            return False, "classifier artifact metadata missing or malformed in strict mode"
+
+        try:
+            expected_train_rows = self._load_rows(self.train_path)
+            expected_calibration_rows = self._load_rows(self.calibration_path)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return False, f"strict artifact metadata validation failed to load dataset: {exc}"
+
+        expected_train_count = len(expected_train_rows)
+        expected_calibration_count = len(expected_calibration_rows)
+        if artifact_metadata.get("train_row_count") != expected_train_count:
+            return False, "classifier artifact metadata train row count mismatch"
+        if artifact_metadata.get("calibration_row_count") != expected_calibration_count:
+            return False, "classifier artifact metadata calibration row count mismatch"
+
+        expected_train_hash = self._rows_digest(expected_train_rows)
+        expected_calibration_hash = self._rows_digest(expected_calibration_rows)
+        if artifact_metadata.get("train_data_sha256") != expected_train_hash:
+            return False, "classifier artifact metadata train hash mismatch"
+        if artifact_metadata.get("calibration_data_sha256") != expected_calibration_hash:
+            return False, "classifier artifact metadata calibration hash mismatch"
+
+        return True, None
 
     def diagnostics(self) -> dict[str, object]:
         return {

@@ -211,6 +211,34 @@ def test_classifier_artifact_metadata_exposed_in_diagnostics(tmp_path: Path) -> 
     assert metadata["train_data_sha256"]
     assert metadata["calibration_data_sha256"]
 
+
+
+def test_classifier_strict_metadata_validation_detects_mismatch(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    write_rows(train_path, rows)
+    write_rows(calibration_path, rows)
+
+    classifier = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        prefer_artifact=False,
+    )
+
+    incompatible_metadata = classifier._build_artifact_metadata(rows + [{"title": "extra", "description": "x", "category": "Shoes"}], rows)
+    compatible, reason = classifier._validate_artifact_metadata(incompatible_metadata)
+
+    assert compatible is False
+    assert reason is not None
+    assert "train" in reason
+
+
 def test_calibration_computes_cumulative_threshold() -> None:
     rows = [
         {"title": "a", "category": "A"},

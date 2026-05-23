@@ -162,6 +162,16 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
         handle.write(f"**Classifier Runtime:** {aggregated['classifier_runtime']}\n\n")
         handle.write(f"**LLM Runtime:** {aggregated['llm_runtime_mode']}\n\n")
 
+        metadata = aggregated.get("classifier_artifact_metadata") or {}
+        if metadata:
+            handle.write("## Artifact Provenance\n\n")
+            handle.write(f"- Created At (UTC): {metadata.get('created_at_utc')}\n")
+            handle.write(f"- Python Version: {metadata.get('python_version')}\n")
+            handle.write(f"- Train Rows: {metadata.get('train_row_count')}\n")
+            handle.write(f"- Calibration Rows: {metadata.get('calibration_row_count')}\n")
+            handle.write(f"- Train SHA-256: {metadata.get('train_data_sha256')}\n")
+            handle.write(f"- Calibration SHA-256: {metadata.get('calibration_data_sha256')}\n\n")
+
         handle.write("## Summary Metrics\n\n")
         handle.write("| Metric | Value |\n")
         handle.write("|--------|-------|\n")
