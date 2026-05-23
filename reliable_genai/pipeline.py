@@ -33,7 +33,8 @@ class ReliabilityPipeline:
         self.max_set_size = int(os.getenv("MAX_SET_SIZE", "3"))
         self.enable_abstain = os.getenv("ENABLE_ABSTAIN", "true").lower() == "true"
         self.llm = GitHubModelsClient()
-        self.classifier = CalibratedTextClassifier(self.LABELS, self.alpha)
+        self.classifier_backend = os.getenv("CLASSIFIER_BACKEND", "tfidf").lower()
+        self.classifier = CalibratedTextClassifier(self.LABELS, self.alpha, backend=self.classifier_backend)
 
     def predict(self, item: ProductInput) -> PredictionResponse:
         classifier_result = self._classify(item)

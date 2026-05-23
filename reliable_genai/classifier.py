@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
+import platform
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -29,6 +32,7 @@ class CalibratedTextClassifier:
         artifact_path: Optional[Path] = None,
         save_artifact: bool = False,
         prefer_artifact: bool = True,
+        backend: str = "tfidf",
     ) -> None:
         self.labels = list(labels)
         self.alpha = alpha
@@ -36,11 +40,14 @@ class CalibratedTextClassifier:
         self.calibration_path = calibration_path
         self.artifact_path = artifact_path if artifact_path is not None else self._default_artifact_path()
         self.save_artifact = save_artifact
+        self.backend = backend
         self.coverage_threshold = 1.0 - alpha
         self.is_ready = False
         self.runtime = "FALLBACK"
         self.reason: Optional[str] = None
         self._model = None
+        self.artifact_metadata: dict[str, object] = {}
+        self.strict_artifact_metadata = os.getenv("STRICT_ARTIFACT_METADATA", "false").lower() == "true"
 
         if prefer_artifact and self.artifact_path and self.artifact_path.exists() and self._load_artifact():
             return
@@ -54,6 +61,31 @@ class CalibratedTextClassifier:
         probabilities = self._predict_probability_map([self._text_from_item(item)])[0]
         sorted_labels = sorted(probabilities, key=lambda label: probabilities[label], reverse=True)
         return ClassifierResult(probabilities=probabilities, sorted_labels=sorted_labels)
+
+    def _pipeline_steps(self, TfidfVectorizer, LogisticRegression) -> list[tuple[str, object]]:
+        if self.backend == "embedding":
+            return [
+                ("tfidf", TfidfVectorizer(ngram_range=(1, 2), lowercase=True, min_df=1, max_features=2048)),
+                (
+                    "classifier",
+                    LogisticRegression(
+                        class_weight="balanced",
+                        max_iter=1000,
+                        random_state=42,
+                    ),
+                ),
+            ]
+        return [
+            ("tfidf", TfidfVectorizer(ngram_range=(1, 2), lowercase=True, min_df=1)),
+            (
+                "classifier",
+                LogisticRegression(
+                    class_weight="balanced",
+                    max_iter=1000,
+                    random_state=42,
+                ),
+            ),
+        ]
 
     def _fit(self) -> None:
         try:
@@ -76,17 +108,7 @@ class CalibratedTextClassifier:
             return
 
         self._model = SklearnPipeline(
-            [
-                ("tfidf", TfidfVectorizer(ngram_range=(1, 2), lowercase=True, min_df=1)),
-                (
-                    "classifier",
-                    LogisticRegression(
-                        class_weight="balanced",
-                        max_iter=1000,
-                        random_state=42,
-                    ),
-                ),
-            ]
+            self._pipeline_steps(TfidfVectorizer, LogisticRegression)
         )
         self._model.fit(
             [self._text_from_row(row) for row in train_rows],
@@ -120,17 +142,30 @@ class CalibratedTextClassifier:
             return False
 
         artifact_labels = payload.get("labels")
+        artifact_backend = payload.get("backend", "tfidf")
         artifact_alpha = payload.get("alpha")
         artifact_model = payload.get("model")
         artifact_threshold = payload.get("coverage_threshold")
+        artifact_metadata = payload.get("metadata") or {}
         if artifact_labels != self.labels or artifact_model is None or artifact_threshold is None:
+            self.reason = "classifier artifact is incompatible"
+            return False
+        if artifact_backend != self.backend:
+            self.reason = "classifier artifact backend does not match runtime backend"
+            return False
             self.reason = "classifier artifact is incompatible"
             return False
         if artifact_alpha is not None and abs(float(artifact_alpha) - self.alpha) > 1e-12:
             self.reason = "classifier artifact alpha does not match runtime alpha"
             return False
+        if self.strict_artifact_metadata:
+            compatible, reason = self._validate_artifact_metadata(artifact_metadata)
+            if not compatible:
+                self.reason = reason
+                return False
 
         self._model = artifact_model
+        self.artifact_metadata = artifact_metadata if isinstance(artifact_metadata, dict) else {}
         self.coverage_threshold = float(artifact_threshold)
         self.is_ready = True
         self.runtime = "ARTIFACT"
@@ -142,11 +177,16 @@ class CalibratedTextClassifier:
             return
 
         self.artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        train_rows = self._load_rows(self.train_path) if self.train_path.exists() else []
+        calibration_rows = self._load_rows(self.calibration_path) if self.calibration_path.exists() else []
+        self.artifact_metadata = self._build_artifact_metadata(train_rows, calibration_rows)
         joblib.dump(
             {
                 "labels": self.labels,
                 "alpha": self.alpha,
                 "coverage_threshold": self.coverage_threshold,
+                "backend": self.backend,
+                "metadata": self.artifact_metadata,
                 "model": self._model,
             },
             self.artifact_path,
@@ -195,6 +235,33 @@ class CalibratedTextClassifier:
             return None
         return DEFAULT_ARTIFACT_PATH
 
+
+    def _validate_artifact_metadata(self, artifact_metadata: object) -> tuple[bool, str | None]:
+        if not isinstance(artifact_metadata, dict):
+            return False, "classifier artifact metadata missing or malformed in strict mode"
+
+        try:
+            expected_train_rows = self._load_rows(self.train_path)
+            expected_calibration_rows = self._load_rows(self.calibration_path)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return False, f"strict artifact metadata validation failed to load dataset: {exc}"
+
+        expected_train_count = len(expected_train_rows)
+        expected_calibration_count = len(expected_calibration_rows)
+        if artifact_metadata.get("train_row_count") != expected_train_count:
+            return False, "classifier artifact metadata train row count mismatch"
+        if artifact_metadata.get("calibration_row_count") != expected_calibration_count:
+            return False, "classifier artifact metadata calibration row count mismatch"
+
+        expected_train_hash = self._rows_digest(expected_train_rows)
+        expected_calibration_hash = self._rows_digest(expected_calibration_rows)
+        if artifact_metadata.get("train_data_sha256") != expected_train_hash:
+            return False, "classifier artifact metadata train hash mismatch"
+        if artifact_metadata.get("calibration_data_sha256") != expected_calibration_hash:
+            return False, "classifier artifact metadata calibration hash mismatch"
+
+        return True, None
+
     def diagnostics(self) -> dict[str, object]:
         return {
             "runtime": self.runtime,
@@ -202,4 +269,28 @@ class CalibratedTextClassifier:
             "reason": self.reason,
             "artifact_path": str(self.artifact_path) if self.artifact_path else None,
             "coverage_threshold": self.coverage_threshold,
+            "backend": self.backend,
+            "artifact_metadata": self.artifact_metadata,
+        }
+
+    @staticmethod
+    def _rows_digest(rows: list[dict[str, str]]) -> str:
+        normalized = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(normalized).hexdigest()
+
+    def _build_artifact_metadata(
+        self,
+        train_rows: list[dict[str, str]],
+        calibration_rows: list[dict[str, str]],
+    ) -> dict[str, object]:
+        return {
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "python_version": platform.python_version(),
+            "train_path": str(self.train_path),
+            "calibration_path": str(self.calibration_path),
+            "train_row_count": len(train_rows),
+            "calibration_row_count": len(calibration_rows),
+            "train_data_sha256": self._rows_digest(train_rows) if train_rows else None,
+            "calibration_data_sha256": self._rows_digest(calibration_rows) if calibration_rows else None,
+            "backend": self.backend,
         }

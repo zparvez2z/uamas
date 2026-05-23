@@ -26,6 +26,7 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_ARTIFACT_PATH.with_name("calibration.json"),
     )
     parser.add_argument("--alpha", type=float, default=0.3)
+    parser.add_argument("--backend", choices=["tfidf", "embedding"], default="tfidf")
     parser.add_argument("--force", action="store_true", help="Retrain even if an artifact already exists")
     return parser.parse_args()
 
@@ -40,6 +41,7 @@ def main() -> None:
         artifact_path=args.artifact_path,
         save_artifact=True,
         prefer_artifact=not args.force,
+        backend=args.backend,
     )
 
     if not classifier.is_ready:
@@ -57,6 +59,7 @@ def main() -> None:
                 "cumulative_threshold": classifier.coverage_threshold,
                 "labels": classifier.labels,
                 "classifier_artifact": str(args.artifact_path),
+                "backend": classifier.backend,
             },
             handle,
             indent=2,
