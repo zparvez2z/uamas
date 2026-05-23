@@ -56,8 +56,7 @@ def run_evaluation(
         os.environ["ALPHA"] = str(alpha)
     if max_set_size is not None:
         os.environ["MAX_SET_SIZE"] = str(max_set_size)
-    if use_mock:
-        os.environ["USE_MOCK_LLM"] = "true"
+    os.environ["USE_MOCK_LLM"] = "true" if use_mock else "false"
 
     print("[INFO] Initializing pipeline...")
     pipeline = ReliabilityPipeline()
@@ -124,6 +123,17 @@ def run_evaluation(
         calibrated_cumulative_threshold=pipeline.classifier.coverage_threshold,
     ).model_dump()
 
+    runtime_breakdown = {
+        "live_count": sum(1 for r in results if r["reliability"].get("llm_runtime") == "LIVE"),
+        "mock_count": sum(1 for r in results if r["reliability"].get("llm_runtime") == "MOCK"),
+        "fallback_mock_count": sum(
+            1 for r in results if r["reliability"].get("llm_runtime") == "FALLBACK_MOCK"
+        ),
+    }
+    runtime_breakdown["fallback_rate"] = (
+        round(runtime_breakdown["fallback_mock_count"] / len(results), 3) if results else 0.0
+    )
+
     return {
         "timestamp": datetime.now().isoformat() if include_runtime else DETERMINISTIC_TIMESTAMP,
         "total_products": len(results),
@@ -140,6 +150,7 @@ def run_evaluation(
         "llm_runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
         "results": results,
         "metrics": metrics,
+        "runtime_breakdown": runtime_breakdown,
         "include_runtime": include_runtime,
     }
 
@@ -161,6 +172,14 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
         handle.write(f"**Classifier:** {aggregated['classifier_mode']}\n\n")
         handle.write(f"**Classifier Runtime:** {aggregated['classifier_runtime']}\n\n")
         handle.write(f"**LLM Runtime:** {aggregated['llm_runtime_mode']}\n\n")
+
+        runtime_breakdown = aggregated.get("runtime_breakdown") or {}
+        if runtime_breakdown:
+            handle.write("## LLM Runtime Breakdown\n\n")
+            handle.write(f"- LIVE calls: {runtime_breakdown.get('live_count', 0)}\n")
+            handle.write(f"- MOCK calls: {runtime_breakdown.get('mock_count', 0)}\n")
+            handle.write(f"- FALLBACK_MOCK calls: {runtime_breakdown.get('fallback_mock_count', 0)}\n")
+            handle.write(f"- Fallback rate: {runtime_breakdown.get('fallback_rate', 0.0):.3f}\n\n")
 
         metadata = aggregated.get("classifier_artifact_metadata") or {}
         if metadata:
@@ -227,11 +246,15 @@ if __name__ == "__main__":
     load_dotenv(dotenv_path=str(env_file), override=True)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--include-runtime", action="store_true", help="Include wall-clock timing in saved results")
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument("--live", action="store_true", help="Run evaluation with USE_MOCK_LLM=false")
+    mode_group.add_argument("--mock", action="store_true", help="Run evaluation with USE_MOCK_LLM=true (default)")
     parser.add_argument("--output", default="reports/results.md", help="Markdown report output path")
     args = parser.parse_args()
 
     try:
-        aggregated_results = run_evaluation(use_mock=True, include_runtime=args.include_runtime)
+        use_mock = not args.live
+        aggregated_results = run_evaluation(use_mock=use_mock, include_runtime=args.include_runtime)
         save_results(aggregated_results, output_path=args.output)
 
         summary = aggregated_results["metrics"]
