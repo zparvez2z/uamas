@@ -182,3 +182,13 @@ If metrics show:
 - **Set size >> 3:** Classifier may need tuning
 - **Abstention rate > 50%:** Alpha (confidence threshold) may be too strict
 - **Runtime >> 5s:** LLM API degradation or network latency
+
+
+## Pre-demo Runtime Trust Check (60 seconds)
+1. Start server in live mode:
+   `USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload`
+2. Confirm diagnostics:
+   `curl -s http://127.0.0.1:8000/diagnostics | python -m json.tool`
+3. Run a clear example and verify `reliability.llm_runtime` plus diagnostics `last_runtime`.
+4. Run an ambiguous example and confirm policy metadata (`set_size`, `abstained`, `reason`).
+5. If fallback occurs, call it out explicitly during the demo as graceful degradation.

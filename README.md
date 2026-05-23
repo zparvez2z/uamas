@@ -65,3 +65,14 @@ Example:
 ## Notes
 - Public or synthetic data only.
 - No internal Schwarz data is included.
+
+
+## Pre-demo live validation checklist
+1. Export the required GitHub Models environment variables (`GITHUB_MODELS_ENDPOINT`, `GITHUB_TOKEN`, `GITHUB_MODELS_MODEL`).
+2. Start the app with live mode enabled:
+   `USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload`
+3. Verify runtime readiness:
+   `curl -s http://127.0.0.1:8000/diagnostics | python -m json.tool`
+4. Run one clear and one ambiguous prediction through `POST /predict`.
+5. Confirm `reliability.llm_runtime` and diagnostics `last_runtime` show the expected live/fallback path.
+6. If a fallback path appears, capture the reason and include it in demo notes.
