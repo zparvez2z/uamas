@@ -133,12 +133,24 @@ def run_evaluation(
     ).model_dump()
 
     runtime_breakdown = {
-        "live_count": sum(1 for r in results if r["reliability"].get("llm_runtime") == "LIVE"),
-        "mock_count": sum(1 for r in results if r["reliability"].get("llm_runtime") == "MOCK"),
-        "fallback_mock_count": sum(
-            1 for r in results if r["reliability"].get("llm_runtime") == "FALLBACK_MOCK"
-        ),
+        "live_count": 0,
+        "mock_count": 0,
+        "fallback_mock_count": 0,
     }
+    expected_live_mode = not pipeline.llm.use_mock
+    for result in results:
+        runtime = result["reliability"].get("llm_runtime")
+        if runtime == "LIVE":
+            runtime_breakdown["live_count"] += 1
+        elif runtime == "FALLBACK_MOCK":
+            runtime_breakdown["fallback_mock_count"] += 1
+        elif runtime == "MOCK":
+            if expected_live_mode:
+                runtime_breakdown["fallback_mock_count"] += 1
+            else:
+                runtime_breakdown["mock_count"] += 1
+        else:
+            runtime_breakdown["mock_count"] += 1
     runtime_breakdown["fallback_rate"] = (
         round(runtime_breakdown["fallback_mock_count"] / len(results), 3) if results else 0.0
     )
