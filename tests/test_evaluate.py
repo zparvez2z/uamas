@@ -71,6 +71,8 @@ class FakeLivePipeline(FakePipeline):
         runtime = "FALLBACK_MOCK" if "fallback" in product.title else "LIVE"
         response.reliability.llm_runtime = runtime
         return response
+
+
 def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     rows = [
         {"title": "shoe product", "description": "", "category": "Shoes"},
@@ -89,7 +91,12 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     assert aggregated["classifier_runtime"] == "TRAINED"
     assert aggregated["coverage_threshold"] == 0.7
     assert aggregated["llm_runtime_mode"] == "MOCK"
-    assert aggregated["runtime_breakdown"] == {"live_count": 0, "mock_count": 3, "fallback_mock_count": 0, "fallback_rate": 0.0}
+    assert aggregated["runtime_breakdown"] == {
+        "live_count": 0,
+        "mock_count": 3,
+        "fallback_mock_count": 0,
+        "fallback_rate": 0.0,
+    }
     assert metrics["target_coverage"] == 0.7
     assert metrics["calibrated_cumulative_threshold"] == 0.7
     assert metrics["empirical_coverage"] == 0.667
@@ -120,6 +127,7 @@ def test_save_results_is_stable_without_runtime(monkeypatch, tmp_path) -> None:
 
     assert report == second_path.read_text(encoding="utf-8")
     assert "**Generated:** deterministic" in report
+    assert "## LLM Runtime Breakdown" not in report
     assert "Runtime (ms)" not in report
     assert "avg_runtime_ms" not in report
 
@@ -178,3 +186,13 @@ def test_save_results_includes_runtime_breakdown(monkeypatch, tmp_path) -> None:
     assert "## LLM Runtime Breakdown" in report
     assert "- LIVE calls: 1" in report
     assert "- FALLBACK_MOCK calls: 1" in report
+
+
+def test_resolve_use_mock_defaults_to_mock() -> None:
+    args = evaluate.argparse.Namespace(live=False, mock=False)
+    assert evaluate.resolve_use_mock(args) is True
+
+
+def test_resolve_use_mock_live_overrides_default() -> None:
+    args = evaluate.argparse.Namespace(live=True, mock=False)
+    assert evaluate.resolve_use_mock(args) is False

@@ -46,6 +46,15 @@ def display_path(path: object, deterministic: bool) -> object:
         return str(candidate)
 
 
+def resolve_use_mock(args: argparse.Namespace) -> bool:
+    """Resolve mutually exclusive CLI flags into a single mode."""
+    if args.live:
+        return False
+    if args.mock:
+        return True
+    return True
+
+
 def run_evaluation(
     use_mock: bool = True,
     alpha: float | None = None,
@@ -174,7 +183,11 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
         handle.write(f"**LLM Runtime:** {aggregated['llm_runtime_mode']}\n\n")
 
         runtime_breakdown = aggregated.get("runtime_breakdown") or {}
-        if runtime_breakdown:
+        should_render_runtime_breakdown = (
+            aggregated.get("llm_runtime_mode") == "LIVE"
+            or runtime_breakdown.get("fallback_mock_count", 0) > 0
+        )
+        if should_render_runtime_breakdown:
             handle.write("## LLM Runtime Breakdown\n\n")
             handle.write(f"- LIVE calls: {runtime_breakdown.get('live_count', 0)}\n")
             handle.write(f"- MOCK calls: {runtime_breakdown.get('mock_count', 0)}\n")
@@ -253,7 +266,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
-        use_mock = not args.live
+        use_mock = resolve_use_mock(args)
         aggregated_results = run_evaluation(use_mock=use_mock, include_runtime=args.include_runtime)
         save_results(aggregated_results, output_path=args.output)
 
