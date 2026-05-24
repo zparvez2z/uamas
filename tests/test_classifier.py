@@ -42,7 +42,7 @@ def test_classifier_trains_calibrates_and_predicts_probabilities(tmp_path: Path)
 
     assert classifier.is_ready
     assert classifier.runtime == "TRAINED"
-    assert classifier.reason is None
+    assert classifier.reason == "model_type=embedding"
     assert 0.0 < classifier.coverage_threshold <= 1.0
     assert set(result.probabilities) == {"Shoes", "Clothing"}
     assert result.sorted_labels[0] == "Shoes"

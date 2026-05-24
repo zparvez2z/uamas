@@ -125,7 +125,7 @@ class CalibratedTextClassifier:
         self.coverage_threshold = calibration.cumulative_threshold
         self.is_ready = True
         self.runtime = "TRAINED"
-        self.reason = None
+        self.reason = f"model_type={self.model_type}"
         if self.save_artifact and self.artifact_path:
             self._save_artifact()
 
