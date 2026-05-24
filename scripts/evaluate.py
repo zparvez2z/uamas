@@ -70,7 +70,8 @@ def run_evaluation(
     print("[INFO] Initializing pipeline...")
     pipeline = ReliabilityPipeline()
     classifier_diagnostics = pipeline.classifier.diagnostics()
-    classifier_mode = "tfidf_logreg_calibrated" if pipeline.classifier.is_ready else "keyword_fallback"
+    classifier_model_type = str(classifier_diagnostics.get("model_type") or "unknown")
+    classifier_mode = f"{classifier_model_type}_logreg_calibrated" if pipeline.classifier.is_ready else "keyword_fallback"
     print(f"[INFO] Classifier mode: {classifier_mode}")
     print(f"[INFO] Classifier runtime: {classifier_diagnostics['runtime']}")
     if pipeline.classifier.reason:
@@ -162,6 +163,7 @@ def run_evaluation(
         "classifier_ready": pipeline.classifier.is_ready,
         "classifier_reason": pipeline.classifier.reason,
         "classifier_runtime": classifier_diagnostics["runtime"],
+        "classifier_model_type": classifier_model_type,
         "classifier_artifact_path": display_path(
             classifier_diagnostics["artifact_path"],
             deterministic=not include_runtime,
