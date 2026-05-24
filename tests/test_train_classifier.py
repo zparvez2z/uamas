@@ -50,3 +50,4 @@ def test_train_classifier_script_writes_artifacts(tmp_path: Path) -> None:
     assert calibration_summary["alpha"] == 0.3
     assert calibration_summary["coverage_target"] == 0.7
     assert calibration_summary["classifier_artifact"] == str(artifact_path)
+    assert calibration_summary["model_type"] == "embedding"
