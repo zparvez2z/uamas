@@ -30,6 +30,8 @@ Open: http://127.0.0.1:8000
 ## Checks
 ```bash
 .venv/bin/python scripts/train_classifier.py --force
+# Optional: explicitly train TF-IDF mode
+.venv/bin/python scripts/train_classifier.py --force --model-type tfidf
 .venv/bin/python -m pytest
 USE_MOCK_LLM=true .venv/bin/python scripts/evaluate.py
 # Optional timing run:
@@ -48,6 +50,7 @@ Useful runtime flags:
 - `MAX_SET_SIZE`
 - `LLM_MAX_RETRIES`
 - `ENABLE_ABSTAIN`
+- `CLASSIFIER_MODEL_TYPE` (`embedding` default, optional `tfidf`)
 
 ## Demo inputs
 Use a clear case first, then an ambiguous one.
@@ -83,3 +86,9 @@ Example:
 - Use feature-scoped unique test names (for example: `test_eval_runtime_*`) to avoid duplicate definitions.
 - Avoid committing generated report artifacts unless reviewers explicitly request them.
 - For stacked work, split follow-up updates into small PRs that touch fewer hotspot files.
+
+
+## Classifier runtime notes
+- Default classifier mode is **embedding-first** (`HashingVectorizer + TruncatedSVD + LogisticRegression`).
+- You can switch training/runtime mode with `CLASSIFIER_MODEL_TYPE=tfidf` for compatibility checks.
+- `GET /diagnostics` exposes `classifier_model_type`, `classifier_runtime`, and calibration threshold for demo verification.

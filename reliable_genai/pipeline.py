@@ -60,6 +60,7 @@ class ReliabilityPipeline:
             classifier_runtime=str(classifier_diagnostics["runtime"]),
             classifier_reason=classifier_diagnostics["reason"],
             classifier_artifact_path=classifier_diagnostics["artifact_path"],
+            classifier_model_type=classifier_diagnostics.get("model_type"),
             coverage_threshold=float(classifier_diagnostics["coverage_threshold"]),
         )
 

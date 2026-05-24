@@ -15,6 +15,7 @@ class FakeClassifier:
             "ready": True,
             "reason": None,
             "artifact_path": None,
+            "model_type": "embedding",
             "coverage_threshold": 0.7,
         }
 
@@ -56,6 +57,7 @@ class FakePipeline:
                 classifier_runtime="TRAINED",
                 classifier_reason=None,
                 classifier_artifact_path=None,
+                classifier_model_type="embedding",
                 coverage_threshold=0.7,
             ),
         )
@@ -96,8 +98,9 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
 
     assert aggregated["timestamp"] == "deterministic"
     assert aggregated["include_runtime"] is False
-    assert aggregated["classifier_mode"] == "tfidf_logreg_calibrated"
+    assert aggregated["classifier_mode"] == "embedding_logreg_calibrated"
     assert aggregated["classifier_runtime"] == "TRAINED"
+    assert aggregated["classifier_model_type"] == "embedding"
     assert aggregated["coverage_threshold"] == 0.7
     assert aggregated["llm_runtime_mode"] == "MOCK"
     assert aggregated["runtime_breakdown"] == {

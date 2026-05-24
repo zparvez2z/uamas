@@ -21,7 +21,7 @@ DEFAULT_ARTIFACT_PATH = PROJECT_ROOT / "artifacts" / "classifier.joblib"
 
 
 class CalibratedTextClassifier:
-    """TF-IDF classifier with a conformal cumulative-mass threshold."""
+    """Embedding-first classifier with TF-IDF fallback and conformal threshold."""
 
     def __init__(
         self,
@@ -46,6 +46,7 @@ class CalibratedTextClassifier:
         self._model = None
         self.artifact_metadata: dict[str, object] = {}
         self.strict_artifact_metadata = os.getenv("STRICT_ARTIFACT_METADATA", "false").lower() == "true"
+        self.model_type = os.getenv("CLASSIFIER_MODEL_TYPE", "embedding").lower()
 
         if prefer_artifact and self.artifact_path and self.artifact_path.exists() and self._load_artifact():
             return
@@ -62,7 +63,8 @@ class CalibratedTextClassifier:
 
     def _fit(self) -> None:
         try:
-            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.decomposition import TruncatedSVD
+            from sklearn.feature_extraction.text import HashingVectorizer, TfidfVectorizer
             from sklearn.linear_model import LogisticRegression
             from sklearn.pipeline import Pipeline as SklearnPipeline
         except ImportError as exc:
@@ -80,19 +82,36 @@ class CalibratedTextClassifier:
             self.reason = "train or calibration split is empty"
             return
 
-        self._model = SklearnPipeline(
-            [
-                ("tfidf", TfidfVectorizer(ngram_range=(1, 2), lowercase=True, min_df=1)),
-                (
-                    "classifier",
-                    LogisticRegression(
-                        class_weight="balanced",
-                        max_iter=1000,
-                        random_state=42,
+        if self.model_type == "embedding":
+            n_components = max(2, min(256, len(train_rows) - 1))
+            self._model = SklearnPipeline(
+                [
+                    ("hashing", HashingVectorizer(ngram_range=(1, 2), lowercase=True, n_features=2**14, alternate_sign=False)),
+                    ("svd", TruncatedSVD(n_components=n_components, random_state=42)),
+                    (
+                        "classifier",
+                        LogisticRegression(
+                            class_weight="balanced",
+                            max_iter=1000,
+                            random_state=42,
+                        ),
                     ),
-                ),
-            ]
-        )
+                ]
+            )
+        else:
+            self._model = SklearnPipeline(
+                [
+                    ("tfidf", TfidfVectorizer(ngram_range=(1, 2), lowercase=True, min_df=1)),
+                    (
+                        "classifier",
+                        LogisticRegression(
+                            class_weight="balanced",
+                            max_iter=1000,
+                            random_state=42,
+                        ),
+                    ),
+                ]
+            )
         self._model.fit(
             [self._text_from_row(row) for row in train_rows],
             [row["category"] for row in train_rows],
@@ -243,6 +262,7 @@ class CalibratedTextClassifier:
             "runtime": self.runtime,
             "ready": self.is_ready,
             "reason": self.reason,
+            "model_type": self.model_type,
             "artifact_path": str(self.artifact_path) if self.artifact_path else None,
             "coverage_threshold": self.coverage_threshold,
             "artifact_metadata": self.artifact_metadata,
@@ -267,4 +287,6 @@ class CalibratedTextClassifier:
             "calibration_row_count": len(calibration_rows),
             "train_data_sha256": self._rows_digest(train_rows) if train_rows else None,
             "calibration_data_sha256": self._rows_digest(calibration_rows) if calibration_rows else None,
+            "model_type": self.model_type,
+            "embedding_model_id": "hashing_svd_256",
         }

@@ -275,3 +275,28 @@ def test_scoring_helpers_build_sets_and_abstain() -> None:
     assert decision.category_set == []
     assert decision.abstained
     assert decision.action == "abstain"
+
+
+def test_classifier_can_force_tfidf_mode(tmp_path: Path, monkeypatch) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "trail shoe", "description": "shoe grip", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+        {"title": "denim jacket", "description": "clothing apparel", "category": "Clothing"},
+    ]
+    write_rows(train_path, rows)
+    write_rows(calibration_path, rows)
+    monkeypatch.setenv("CLASSIFIER_MODEL_TYPE", "tfidf")
+
+    classifier = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        prefer_artifact=False,
+    )
+
+    assert classifier.is_ready
+    assert classifier.reason is None
