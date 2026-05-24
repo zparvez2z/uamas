@@ -1,26 +1,35 @@
 # UAMAS Evaluation Results
 
-**Generated:** deterministic
+**Generated:** 2026-05-24T13:38:49.474506
 
 **Classifier:** tfidf_logreg_calibrated
 
-**Classifier Runtime:** ARTIFACT
+**Classifier Runtime:** TRAINED
 
-**LLM Runtime:** MOCK
+**LLM Runtime:** LIVE
+
+## LLM Runtime Breakdown
+
+- LIVE calls: 0
+- MOCK calls: 0
+- FALLBACK_MOCK calls: 31
+- Fallback rate: 1.000
 
 ## Summary Metrics
 
 | Metric | Value |
 |--------|-------|
 | Total Products Tested | 31 |
-| Target Coverage | 0.700 |
-| Calibrated Cumulative Threshold | 0.6376 |
-| Empirical Coverage | 1.000 |
+| Target Coverage | 0.900 |
+| Calibrated Cumulative Threshold | 0.6933 |
+| Empirical Coverage | 0.903 |
 | Selective Coverage | 1.0 |
-| Top-1 Accuracy | 1.000 |
-| Avg Confidence Set Size | 2.0 |
-| Avg Non-Abstained Set Size | 2.0 |
-| Abstention Rate | 0.0% (0 products) |
+| Top-1 Accuracy | 0.903 |
+| Avg Confidence Set Size | 2.16 |
+| Avg Non-Abstained Set Size | 2.39 |
+| Abstention Rate | 9.7% (3 products) |
+| Avg Runtime | 1ms |
+| Max Runtime | 1ms |
 
 
 ## Live Validation Notes
@@ -43,53 +52,54 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
 
 ## Per-Product Results
 
-| # | Product | True Label | Category Set | Covered | Abstained |
-|---|---------|------------|--------------|---------|-----------|
-| 1 | soft T-Shirt for everyday wear | Clothing | Clothing | yes | no |
-| 2 | Philips Bluetooth Monitor | Electronics | Electronics, Home | yes | no |
-| 3 | JBL compact Vacuum smart | Electronics | Electronics | yes | no |
-| 4 | Nike Sweater in a practical design | Clothing | Clothing, Shoes | yes | no |
-| 5 | functional Laundry Basket for everyday h | Home | Home, Sports | yes | no |
-| 6 | Puma Walking Shoes with grippy support | Shoes | Shoes, Electronics | yes | no |
-| 7 | Puma Running Shoes with cushioned suppor | Shoes | Shoes, Clothing, Sports | yes | no |
-| 8 | Running Racket for active performance an | Sports | Sports, Electronics | yes | no |
-| 9 | calming Shampoo for daily skincare | Beauty | Beauty, Home | yes | no |
-| 10 | Home&More Storage Box with practical mul | Home | Home, Electronics, Shoes | yes | no |
-| 11 | rich Shampoo for daily skincare | Beauty | Beauty, Home, Clothing | yes | no |
-| 12 | Decathlon Fitness Tracker with breathabl | Sports | Sports, Home | yes | no |
-| 13 | Tom Tailor Shirt with regular fit finish | Clothing | Clothing, Electronics, Beauty | yes | no |
-| 14 | sporty Training Shoes for daily comfort | Shoes | Shoes | yes | no |
-| 15 | Sony Bluetooth Monitor | Electronics | Electronics, Sports | yes | no |
-| 16 | functional Coffee Mug Set for everyday h | Home | Home, Clothing | yes | no |
-| 17 | Puma Running Shoes with breathable suppo | Shoes | Shoes, Sports, Clothing | yes | no |
-| 18 | Babolat Yoga Mat with breathable design | Sports | Sports, Shoes | yes | no |
-| 19 | Dumbbell Set for active performance and  | Sports | Sports, Electronics | yes | no |
-| 20 | Face Cream for radiant skin and comfort | Beauty | Beauty, Electronics | yes | no |
-| 21 | Water Bottle for active performance and  | Sports | Sports | yes | no |
-| 22 | Nike Slip-Ons for everyday use | Shoes | Shoes, Sports, Clothing | yes | no |
-| 23 | minimal Floor Lamp for everyday home use | Home | Home, Clothing, Electronics | yes | no |
-| 24 | Spa Gift Set | Beauty | Beauty, Home, Sports | yes | no |
-| 25 | CeraVe Mascara with modern styling | Beauty | Beauty, Home | yes | no |
-| 26 | Sony mini Wireless Headphones | Electronics | Electronics, Home | yes | no |
-| 27 | Jeans in classic Grau style | Clothing | Clothing | yes | no |
-| 28 | JBL intelligent Wireless Headphones ener | Electronics | Electronics | yes | no |
-| 29 | classic Leggings for everyday wear | Clothing | Clothing | yes | no |
-| 30 | Philips Storage Box with practical easy- | Home | Home, Electronics | yes | no |
-| 31 | Sony sleek Bluetooth Speaker mini | Electronics | Electronics | yes | no |
+| # | Product | True Label | Category Set | Covered | Abstained | Runtime (ms) |
+|---|---------|------------|--------------|---------|-----------|--------------|
+| 1 | soft T-Shirt for everyday wear | Clothing | Clothing | yes | no | 0.79 |
+| 2 | Philips Bluetooth Monitor | Electronics | Electronics, Home | yes | no | 0.65 |
+| 3 | JBL compact Vacuum smart | Electronics | Electronics, Sports | yes | no | 0.57 |
+| 4 | Nike Sweater in a practical design | Clothing | Clothing, Shoes | yes | no | 0.66 |
+| 5 | functional Laundry Basket for everyday h | Home | Home, Sports, Electronics | yes | no | 0.56 |
+| 6 | Puma Walking Shoes with grippy support | Shoes | Shoes, Electronics, Home | yes | no | 0.54 |
+| 7 | Puma Running Shoes with cushioned suppor | Shoes | Shoes, Clothing, Sports | yes | no | 0.68 |
+| 8 | Running Racket for active performance an | Sports | Sports, Electronics | yes | no | 0.55 |
+| 9 | calming Shampoo for daily skincare | Beauty | Beauty, Home, Sports | yes | no | 0.55 |
+| 10 | Home&More Storage Box with practical mul | Home | Home, Electronics, Shoes | yes | no | 0.56 |
+| 11 | rich Shampoo for daily skincare | Beauty | [] | no | yes | 0.53 |
+| 12 | Decathlon Fitness Tracker with breathabl | Sports | Sports, Home, Electronics | yes | no | 0.52 |
+| 13 | Tom Tailor Shirt with regular fit finish | Clothing | [] | no | yes | 0.57 |
+| 14 | sporty Training Shoes for daily comfort | Shoes | Shoes | yes | no | 0.54 |
+| 15 | Sony Bluetooth Monitor | Electronics | Electronics, Sports | yes | no | 0.54 |
+| 16 | functional Coffee Mug Set for everyday h | Home | Home, Clothing, Sports | yes | no | 0.52 |
+| 17 | Puma Running Shoes with breathable suppo | Shoes | Shoes, Sports, Clothing | yes | no | 0.5 |
+| 18 | Babolat Yoga Mat with breathable design | Sports | Sports, Shoes, Home | yes | no | 0.56 |
+| 19 | Dumbbell Set for active performance and  | Sports | Sports, Electronics, Shoes | yes | no | 0.68 |
+| 20 | Face Cream for radiant skin and comfort | Beauty | Beauty, Electronics | yes | no | 0.56 |
+| 21 | Water Bottle for active performance and  | Sports | Sports, Electronics | yes | no | 0.55 |
+| 22 | Nike Slip-Ons for everyday use | Shoes | Shoes, Sports, Clothing | yes | no | 0.49 |
+| 23 | minimal Floor Lamp for everyday home use | Home | Home, Clothing, Electronics | yes | no | 0.51 |
+| 24 | Spa Gift Set | Beauty | [] | no | yes | 0.5 |
+| 25 | CeraVe Mascara with modern styling | Beauty | Beauty, Home | yes | no | 0.52 |
+| 26 | Sony mini Wireless Headphones | Electronics | Electronics, Home, Beauty | yes | no | 0.5 |
+| 27 | Jeans in classic Grau style | Clothing | Clothing, Shoes | yes | no | 0.53 |
+| 28 | JBL intelligent Wireless Headphones ener | Electronics | Electronics, Sports | yes | no | 0.52 |
+| 29 | classic Leggings for everyday wear | Clothing | Clothing | yes | no | 0.49 |
+| 30 | Philips Storage Box with practical easy- | Home | Home, Electronics, Beauty | yes | no | 0.49 |
+| 31 | Sony sleek Bluetooth Speaker mini | Electronics | Electronics, Sports | yes | no | 0.51 |
 
 ## Full JSON Results
 
 ```json
 {
-  "timestamp": "deterministic",
+  "timestamp": "2026-05-24T13:38:49.474506",
   "total_products": 31,
   "classifier_mode": "tfidf_logreg_calibrated",
   "classifier_ready": true,
   "classifier_reason": null,
-  "classifier_runtime": "ARTIFACT",
-  "classifier_artifact_path": "artifacts/classifier.joblib",
-  "coverage_threshold": 0.6376491214016037,
-  "llm_runtime_mode": "MOCK",
+  "classifier_runtime": "TRAINED",
+  "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+  "coverage_threshold": 0.6933126304754237,
+  "classifier_artifact_metadata": {},
+  "llm_runtime_mode": "LIVE",
   "results": [
     {
       "product_id": 1,
@@ -109,20 +119,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 1,
-        "confidence": 0.7429780034516262,
+        "confidence": 0.742978003451626,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.79,
       "abstained": false
     },
     {
@@ -144,20 +155,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 2,
-        "confidence": 0.6295100160740561,
+        "confidence": 0.629510016074056,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.65,
       "abstained": false
     },
     {
@@ -165,12 +177,13 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "title": "JBL compact Vacuum smart",
       "true_label": "Electronics",
       "category_set": [
-        "Electronics"
+        "Electronics",
+        "Sports"
       ],
       "top_label": "Electronics",
       "covered": true,
       "top1_correct": true,
-      "set_size": 1,
+      "set_size": 2,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -178,20 +191,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 1,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 2,
         "confidence": 0.6816309386286228,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.57,
       "abstained": false
     },
     {
@@ -213,20 +227,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 2,
-        "confidence": 0.6235957213692008,
+        "confidence": 0.6235957213692006,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.66,
       "abstained": false
     },
     {
@@ -235,12 +250,13 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "true_label": "Home",
       "category_set": [
         "Home",
-        "Sports"
+        "Sports",
+        "Electronics"
       ],
       "top_label": "Home",
       "covered": true,
       "top1_correct": true,
-      "set_size": 2,
+      "set_size": 3,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -248,20 +264,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 2,
-        "confidence": 0.5778241116981411,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 3,
+        "confidence": 0.5778241116981405,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.56,
       "abstained": false
     },
     {
@@ -270,12 +287,13 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "true_label": "Shoes",
       "category_set": [
         "Shoes",
-        "Electronics"
+        "Electronics",
+        "Home"
       ],
       "top_label": "Shoes",
       "covered": true,
       "top1_correct": true,
-      "set_size": 2,
+      "set_size": 3,
       "attributes": {
         "brand": "puma",
         "color": "unknown",
@@ -283,20 +301,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 2,
-        "confidence": 0.5834788385259829,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 3,
+        "confidence": 0.583478838525983,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.54,
       "abstained": false
     },
     {
@@ -319,20 +338,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 3,
-        "confidence": 0.4896193860104397,
+        "confidence": 0.48961938601043986,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.68,
       "abstained": false
     },
     {
@@ -354,20 +374,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 2,
-        "confidence": 0.6352238876495673,
+        "confidence": 0.6352238876495672,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.55,
       "abstained": false
     },
     {
@@ -376,12 +397,13 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "true_label": "Beauty",
       "category_set": [
         "Beauty",
-        "Home"
+        "Home",
+        "Sports"
       ],
       "top_label": "Beauty",
       "covered": true,
       "top1_correct": true,
-      "set_size": 2,
+      "set_size": 3,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -389,20 +411,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 2,
-        "confidence": 0.5675100296747375,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 3,
+        "confidence": 0.567510029674738,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.55,
       "abstained": false
     },
     {
@@ -425,35 +448,32 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 3,
-        "confidence": 0.47962883504723347,
+        "confidence": 0.4796288350472327,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.56,
       "abstained": false
     },
     {
       "product_id": 11,
       "title": "rich Shampoo for daily skincare",
       "true_label": "Beauty",
-      "category_set": [
-        "Beauty",
-        "Home",
-        "Clothing"
-      ],
-      "top_label": "Beauty",
-      "covered": true,
-      "top1_correct": true,
-      "set_size": 3,
+      "category_set": [],
+      "top_label": null,
+      "covered": false,
+      "top1_correct": false,
+      "set_size": 0,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -461,21 +481,22 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 3,
-        "confidence": 0.42468794182828046,
-        "abstained": false,
-        "reason": null,
-        "policy_action": "set_output",
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 0,
+        "confidence": 0.424687941828281,
+        "abstained": true,
+        "reason": "Prediction set outside usability constraints",
+        "policy_action": "abstain",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
-      "abstained": false
+      "runtime_ms": 0.53,
+      "abstained": true
     },
     {
       "product_id": 12,
@@ -483,45 +504,10 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "true_label": "Sports",
       "category_set": [
         "Sports",
-        "Home"
+        "Home",
+        "Electronics"
       ],
       "top_label": "Sports",
-      "covered": true,
-      "top1_correct": true,
-      "set_size": 2,
-      "attributes": {
-        "brand": "unknown",
-        "color": "unknown",
-        "material": "unknown",
-        "size": "unknown"
-      },
-      "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 2,
-        "confidence": 0.5629896996478495,
-        "abstained": false,
-        "reason": null,
-        "policy_action": "set_output",
-        "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
-      },
-      "abstained": false
-    },
-    {
-      "product_id": 13,
-      "title": "Tom Tailor Shirt with regular fit finish",
-      "true_label": "Clothing",
-      "category_set": [
-        "Clothing",
-        "Electronics",
-        "Beauty"
-      ],
-      "top_label": "Clothing",
       "covered": true,
       "top1_correct": true,
       "set_size": 3,
@@ -532,21 +518,55 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 3,
-        "confidence": 0.3860132839747743,
+        "confidence": 0.5629896996478495,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.52,
       "abstained": false
+    },
+    {
+      "product_id": 13,
+      "title": "Tom Tailor Shirt with regular fit finish",
+      "true_label": "Clothing",
+      "category_set": [],
+      "top_label": null,
+      "covered": false,
+      "top1_correct": false,
+      "set_size": 0,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 0,
+        "confidence": 0.386013283974774,
+        "abstained": true,
+        "reason": "Prediction set outside usability constraints",
+        "policy_action": "abstain",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": null,
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
+      },
+      "runtime_ms": 0.57,
+      "abstained": true
     },
     {
       "product_id": 14,
@@ -566,20 +586,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 1,
-        "confidence": 0.737769822609563,
+        "confidence": 0.7377698226095631,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.54,
       "abstained": false
     },
     {
@@ -601,8 +622,8 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 2,
         "confidence": 0.6350957526089742,
         "abstained": false,
@@ -610,11 +631,12 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.54,
       "abstained": false
     },
     {
@@ -623,12 +645,13 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "true_label": "Home",
       "category_set": [
         "Home",
-        "Clothing"
+        "Clothing",
+        "Sports"
       ],
       "top_label": "Home",
       "covered": true,
       "top1_correct": true,
-      "set_size": 2,
+      "set_size": 3,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -636,20 +659,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 2,
-        "confidence": 0.5756374334529396,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 3,
+        "confidence": 0.5756374334529387,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.52,
       "abstained": false
     },
     {
@@ -672,20 +696,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 3,
-        "confidence": 0.46114370830771967,
+        "confidence": 0.46114370830771984,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.5,
       "abstained": false
     },
     {
@@ -694,12 +719,13 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "true_label": "Sports",
       "category_set": [
         "Sports",
-        "Shoes"
+        "Shoes",
+        "Home"
       ],
       "top_label": "Sports",
       "covered": true,
       "top1_correct": true,
-      "set_size": 2,
+      "set_size": 3,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -707,20 +733,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 2,
-        "confidence": 0.6001812225299202,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 3,
+        "confidence": 0.6001812225299203,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.56,
       "abstained": false
     },
     {
@@ -729,12 +756,13 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "true_label": "Sports",
       "category_set": [
         "Sports",
-        "Electronics"
+        "Electronics",
+        "Shoes"
       ],
       "top_label": "Sports",
       "covered": true,
       "top1_correct": true,
-      "set_size": 2,
+      "set_size": 3,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -742,20 +770,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 2,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 3,
         "confidence": 0.581626432768668,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.68,
       "abstained": false
     },
     {
@@ -777,20 +806,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 2,
-        "confidence": 0.6350011140877913,
+        "confidence": 0.6350011140877917,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.56,
       "abstained": false
     },
     {
@@ -798,12 +828,13 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "title": "Water Bottle for active performance and fitness",
       "true_label": "Sports",
       "category_set": [
-        "Sports"
+        "Sports",
+        "Electronics"
       ],
       "top_label": "Sports",
       "covered": true,
       "top1_correct": true,
-      "set_size": 1,
+      "set_size": 2,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -811,20 +842,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 1,
-        "confidence": 0.6378956597629981,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 2,
+        "confidence": 0.6378956597629982,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.55,
       "abstained": false
     },
     {
@@ -847,20 +879,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 3,
-        "confidence": 0.5157267704538417,
+        "confidence": 0.515726770453842,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.49,
       "abstained": false
     },
     {
@@ -883,35 +916,32 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 3,
-        "confidence": 0.5011288522052885,
+        "confidence": 0.5011288522052879,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.51,
       "abstained": false
     },
     {
       "product_id": 24,
       "title": "Spa Gift Set",
       "true_label": "Beauty",
-      "category_set": [
-        "Beauty",
-        "Home",
-        "Sports"
-      ],
-      "top_label": "Beauty",
-      "covered": true,
-      "top1_correct": true,
-      "set_size": 3,
+      "category_set": [],
+      "top_label": null,
+      "covered": false,
+      "top1_correct": false,
+      "set_size": 0,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -919,21 +949,22 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 3,
-        "confidence": 0.34641550267619114,
-        "abstained": false,
-        "reason": null,
-        "policy_action": "set_output",
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 0,
+        "confidence": 0.34641550267619164,
+        "abstained": true,
+        "reason": "Prediction set outside usability constraints",
+        "policy_action": "abstain",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
-      "abstained": false
+      "runtime_ms": 0.5,
+      "abstained": true
     },
     {
       "product_id": 25,
@@ -954,20 +985,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 2,
-        "confidence": 0.6183307710234923,
+        "confidence": 0.6183307710234927,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.52,
       "abstained": false
     },
     {
@@ -976,7 +1008,80 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "true_label": "Electronics",
       "category_set": [
         "Electronics",
-        "Home"
+        "Home",
+        "Beauty"
+      ],
+      "top_label": "Electronics",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 3,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 3,
+        "confidence": 0.5630236249071986,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": null,
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
+      },
+      "runtime_ms": 0.5,
+      "abstained": false
+    },
+    {
+      "product_id": 27,
+      "title": "Jeans in classic Grau style",
+      "true_label": "Clothing",
+      "category_set": [
+        "Clothing",
+        "Shoes"
+      ],
+      "top_label": "Clothing",
+      "covered": true,
+      "top1_correct": true,
+      "set_size": 2,
+      "attributes": {
+        "brand": "unknown",
+        "color": "unknown",
+        "material": "unknown",
+        "size": "unknown"
+      },
+      "reliability": {
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 2,
+        "confidence": 0.672967392557696,
+        "abstained": false,
+        "reason": null,
+        "policy_action": "set_output",
+        "llm_runtime": "MOCK",
+        "llm_model": "openai/gpt-4.1",
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": null,
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
+      },
+      "runtime_ms": 0.53,
+      "abstained": false
+    },
+    {
+      "product_id": 28,
+      "title": "JBL intelligent Wireless Headphones energy-saving",
+      "true_label": "Electronics",
+      "category_set": [
+        "Electronics",
+        "Sports"
       ],
       "top_label": "Electronics",
       "covered": true,
@@ -989,88 +1094,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 2,
-        "confidence": 0.5630236249071985,
-        "abstained": false,
-        "reason": null,
-        "policy_action": "set_output",
-        "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
-      },
-      "abstained": false
-    },
-    {
-      "product_id": 27,
-      "title": "Jeans in classic Grau style",
-      "true_label": "Clothing",
-      "category_set": [
-        "Clothing"
-      ],
-      "top_label": "Clothing",
-      "covered": true,
-      "top1_correct": true,
-      "set_size": 1,
-      "attributes": {
-        "brand": "unknown",
-        "color": "unknown",
-        "material": "unknown",
-        "size": "unknown"
-      },
-      "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 1,
-        "confidence": 0.6729673925576961,
-        "abstained": false,
-        "reason": null,
-        "policy_action": "set_output",
-        "llm_runtime": "MOCK",
-        "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
-      },
-      "abstained": false
-    },
-    {
-      "product_id": 28,
-      "title": "JBL intelligent Wireless Headphones energy-saving",
-      "true_label": "Electronics",
-      "category_set": [
-        "Electronics"
-      ],
-      "top_label": "Electronics",
-      "covered": true,
-      "top1_correct": true,
-      "set_size": 1,
-      "attributes": {
-        "brand": "unknown",
-        "color": "unknown",
-        "material": "unknown",
-        "size": "unknown"
-      },
-      "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 1,
         "confidence": 0.6583700396448608,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.52,
       "abstained": false
     },
     {
@@ -1091,20 +1129,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
         "set_size": 1,
-        "confidence": 0.730863423857075,
+        "confidence": 0.7308634238570749,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.49,
       "abstained": false
     },
     {
@@ -1113,12 +1152,13 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "true_label": "Home",
       "category_set": [
         "Home",
-        "Electronics"
+        "Electronics",
+        "Beauty"
       ],
       "top_label": "Home",
       "covered": true,
       "top1_correct": true,
-      "set_size": 2,
+      "set_size": 3,
       "attributes": {
         "brand": "unknown",
         "color": "unknown",
@@ -1126,20 +1166,21 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 2,
-        "confidence": 0.5321698705349399,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 3,
+        "confidence": 0.5321698705349392,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.49,
       "abstained": false
     },
     {
@@ -1147,12 +1188,13 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
       "title": "Sony sleek Bluetooth Speaker mini",
       "true_label": "Electronics",
       "category_set": [
-        "Electronics"
+        "Electronics",
+        "Sports"
       ],
       "top_label": "Electronics",
       "covered": true,
       "top1_correct": true,
-      "set_size": 1,
+      "set_size": 2,
       "attributes": {
         "brand": "unknown",
         "color": "blue",
@@ -1160,36 +1202,45 @@ Before stakeholder demos, run a live validation pass (`USE_MOCK_LLM=false`) and 
         "size": "unknown"
       },
       "reliability": {
-        "alpha": 0.3,
-        "coverage_target": 0.7,
-        "set_size": 1,
-        "confidence": 0.666053838695884,
+        "alpha": 0.1,
+        "coverage_target": 0.9,
+        "set_size": 2,
+        "confidence": 0.6660538386958839,
         "abstained": false,
         "reason": null,
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
+        "classifier_runtime": "TRAINED",
         "classifier_reason": null,
-        "classifier_artifact_path": "artifacts/classifier.joblib",
-        "coverage_threshold": 0.6376491214016037
+        "classifier_artifact_path": "/workspace/uamas/artifacts/classifier.joblib",
+        "coverage_threshold": 0.6933126304754237
       },
+      "runtime_ms": 0.51,
       "abstained": false
     }
   ],
   "metrics": {
-    "target_coverage": 0.7,
-    "calibrated_cumulative_threshold": 0.6376,
-    "empirical_coverage": 1.0,
+    "target_coverage": 0.9,
+    "calibrated_cumulative_threshold": 0.6933,
+    "empirical_coverage": 0.903,
     "selective_coverage": 1.0,
-    "top1_accuracy": 1.0,
-    "avg_set_size": 2.0,
-    "avg_non_abstained_set_size": 2.0,
+    "top1_accuracy": 0.903,
+    "avg_set_size": 2.16,
+    "avg_non_abstained_set_size": 2.39,
     "max_set_size": 3,
-    "min_set_size": 1,
-    "abstention_count": 0,
-    "abstention_rate": 0.0
+    "min_set_size": 0,
+    "abstention_count": 3,
+    "abstention_rate": 0.097,
+    "avg_runtime_ms": 0.56,
+    "max_runtime_ms": 0.79
   },
-  "include_runtime": false
+  "runtime_breakdown": {
+    "live_count": 0,
+    "mock_count": 0,
+    "fallback_mock_count": 31,
+    "fallback_rate": 1.0
+  },
+  "include_runtime": true
 }
 ```
