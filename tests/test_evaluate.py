@@ -23,6 +23,10 @@ class FakeLLM:
     use_mock = True
 
 
+class FakeLiveLLM:
+    use_mock = False
+
+
 class FakePipeline:
     alpha = 0.3
     classifier = FakeClassifier()
@@ -57,6 +61,27 @@ class FakePipeline:
         )
 
 
+
+
+class FakeLivePipeline(FakePipeline):
+    llm = FakeLiveLLM()
+
+    def predict(self, product):
+        response = super().predict(product)
+        runtime = "FALLBACK_MOCK" if "fallback" in product.title else "LIVE"
+        response.reliability.llm_runtime = runtime
+        return response
+
+
+class FakeLiveWithMockRuntimePipeline(FakePipeline):
+    llm = FakeLiveLLM()
+
+    def predict(self, product):
+        response = super().predict(product)
+        response.reliability.llm_runtime = "MOCK"
+        return response
+
+
 def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     rows = [
         {"title": "shoe product", "description": "", "category": "Shoes"},
@@ -75,6 +100,12 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     assert aggregated["classifier_runtime"] == "TRAINED"
     assert aggregated["coverage_threshold"] == 0.7
     assert aggregated["llm_runtime_mode"] == "MOCK"
+    assert aggregated["runtime_breakdown"] == {
+        "live_count": 0,
+        "mock_count": 3,
+        "fallback_mock_count": 0,
+        "fallback_rate": 0.0,
+    }
     assert metrics["target_coverage"] == 0.7
     assert metrics["calibrated_cumulative_threshold"] == 0.7
     assert metrics["empirical_coverage"] == 0.667
@@ -105,6 +136,7 @@ def test_save_results_is_stable_without_runtime(monkeypatch, tmp_path) -> None:
 
     assert report == second_path.read_text(encoding="utf-8")
     assert "**Generated:** deterministic" in report
+    assert "## LLM Runtime Breakdown" not in report
     assert "Runtime (ms)" not in report
     assert "avg_runtime_ms" not in report
 
@@ -128,3 +160,63 @@ def test_compute_metrics_handles_selective_coverage() -> None:
     assert metrics.avg_set_size == 1.0
     assert metrics.avg_non_abstained_set_size == 1.5
     assert metrics.calibrated_cumulative_threshold == 0.7654
+
+
+def test_run_evaluation_live_mode_and_runtime_breakdown(monkeypatch) -> None:
+    rows = [
+        {"title": "live product", "description": "", "category": "Shoes"},
+        {"title": "fallback product", "description": "", "category": "Shoes"},
+    ]
+    monkeypatch.setattr(evaluate, "ReliabilityPipeline", FakeLivePipeline)
+    monkeypatch.setattr(evaluate, "load_labeled_dataset", lambda: rows)
+
+    aggregated = evaluate.run_evaluation(use_mock=False)
+
+    assert aggregated["llm_runtime_mode"] == "LIVE"
+    assert aggregated["runtime_breakdown"]["live_count"] == 1
+    assert aggregated["runtime_breakdown"]["fallback_mock_count"] == 1
+    assert aggregated["runtime_breakdown"]["mock_count"] == 0
+    assert aggregated["runtime_breakdown"]["fallback_rate"] == 0.5
+
+
+def test_run_evaluation_live_mode_treats_mock_runtime_as_fallback(monkeypatch) -> None:
+    rows = [
+        {"title": "live product", "description": "", "category": "Shoes"},
+    ]
+    monkeypatch.setattr(evaluate, "ReliabilityPipeline", FakeLiveWithMockRuntimePipeline)
+    monkeypatch.setattr(evaluate, "load_labeled_dataset", lambda: rows)
+
+    aggregated = evaluate.run_evaluation(use_mock=False)
+
+    assert aggregated["llm_runtime_mode"] == "LIVE"
+    assert aggregated["runtime_breakdown"]["live_count"] == 0
+    assert aggregated["runtime_breakdown"]["mock_count"] == 0
+    assert aggregated["runtime_breakdown"]["fallback_mock_count"] == 1
+
+
+def test_save_results_includes_runtime_breakdown(monkeypatch, tmp_path) -> None:
+    rows = [
+        {"title": "live product", "description": "", "category": "Shoes"},
+        {"title": "fallback product", "description": "", "category": "Shoes"},
+    ]
+    monkeypatch.setattr(evaluate, "ReliabilityPipeline", FakeLivePipeline)
+    monkeypatch.setattr(evaluate, "load_labeled_dataset", lambda: rows)
+
+    aggregated = evaluate.run_evaluation(use_mock=False)
+    output = tmp_path / "report.md"
+    evaluate.save_results(aggregated, output_path=str(output))
+    report = output.read_text(encoding="utf-8")
+
+    assert "## LLM Runtime Breakdown" in report
+    assert "- LIVE calls: 1" in report
+    assert "- FALLBACK_MOCK calls: 1" in report
+
+
+def test_resolve_use_mock_defaults_to_mock() -> None:
+    args = evaluate.argparse.Namespace(live=False, mock=False)
+    assert evaluate.resolve_use_mock(args) is True
+
+
+def test_resolve_use_mock_live_overrides_default() -> None:
+    args = evaluate.argparse.Namespace(live=True, mock=False)
+    assert evaluate.resolve_use_mock(args) is False
