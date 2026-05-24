@@ -28,6 +28,7 @@ class ReliabilityMeta(BaseModel):
     classifier_runtime: str
     classifier_reason: Optional[str] = None
     classifier_artifact_path: Optional[str] = None
+    classifier_model_type: Optional[str] = None
     coverage_threshold: float
 
 
