@@ -95,6 +95,7 @@ flowchart LR
 
 ### `scripts/train_classifier.py`
 - Rebuilds the classifier artifact from train and calibration splits.
+- Accepts `--model-type` to train either `embedding` (default) or `tfidf`.
 - Writes `artifacts/classifier.joblib` and a readable `artifacts/calibration.json` summary.
 
 ### `reliable_genai/calibration.py`
@@ -176,6 +177,7 @@ Behavior flags:
 - `MAX_SET_SIZE`
 - `LLM_MAX_RETRIES`
 - `ENABLE_ABSTAIN`
+- `CLASSIFIER_MODEL_TYPE` (`embedding` default, `tfidf` optional)
 
 ## 9) Suggested Evaluation
 The demo should be evaluated on:
@@ -225,7 +227,7 @@ The project is intended to work with public or synthetic product data. The CSV c
 
 ## 12) Next Technical Enhancements
 Possible next steps if the project is extended:
-- replace the TF-IDF classifier with an embedding-based classifier,
-- version trained model artifacts with metadata if multiple classifiers are compared,
+- add richer embedding backends (for example sentence-transformers) behind the current embedding-first interface,
+- version and compare trained model artifacts across classifier families with explicit metadata,
 - add a small evaluation notebook or report,
 - and add a results dashboard for coverage and abstention metrics.
