@@ -65,7 +65,7 @@ flowchart LR
 
 ## 4) Request Flow
 1. The browser submits a product title and description to `POST /predict`.
-2. `ReliabilityPipeline.predict()` creates a category score vector from a TF-IDF + logistic regression classifier trained on the processed training split. If scikit-learn or data files are unavailable, it falls back to the keyword scorer.
+2. `ReliabilityPipeline.predict()` creates a category score vector from a embedding-first (hashing+SVD) + logistic regression classifier trained on the processed training split. If scikit-learn or data files are unavailable, it falls back to the keyword scorer.
 3. The set builder keeps labels until cumulative probability crosses the calibrated cumulative-mass threshold computed on the calibration split.
 4. `GitHubModelsClient.extract_attributes()` calls the model or falls back to a deterministic extractor.
 5. The response is validated through the Pydantic models in `reliable_genai/models.py`.
@@ -87,7 +87,7 @@ flowchart LR
 - Returns the final response object.
 
 ### `reliable_genai/classifier.py`
-- Trains a TF-IDF + logistic regression classifier from `data/processed/train.json`.
+- Trains a embedding-first (hashing+SVD) + logistic regression classifier from `data/processed/train.json`.
 - Loads `artifacts/classifier.joblib` when a compatible artifact is present.
 - Can persist a freshly trained classifier artifact for repeatable startup behavior.
 - Returns class probabilities for prediction-set construction.
