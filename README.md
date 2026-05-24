@@ -76,3 +76,10 @@ Example:
 4. Run one clear and one ambiguous prediction through `POST /predict`.
 5. Confirm `reliability.llm_runtime` and diagnostics `last_runtime` show the expected live/fallback path.
 6. If a fallback path appears, capture the reason and include it in demo notes.
+## Merge safety checklist
+- Keep each PR single-purpose (for example: evaluation logic, tests, or docs), instead of mixing concerns.
+- Rebase your branch on `main` before opening a PR and again before merge.
+- Prefer append-only edits in large test files to reduce overlapping insertion hunks.
+- Use feature-scoped unique test names (for example: `test_eval_runtime_*`) to avoid duplicate definitions.
+- Avoid committing generated report artifacts unless reviewers explicitly request them.
+- For stacked work, split follow-up updates into small PRs that touch fewer hotspot files.
