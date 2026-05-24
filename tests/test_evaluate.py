@@ -73,6 +73,15 @@ class FakeLivePipeline(FakePipeline):
         return response
 
 
+class FakeLiveWithMockRuntimePipeline(FakePipeline):
+    llm = FakeLiveLLM()
+
+    def predict(self, product):
+        response = super().predict(product)
+        response.reliability.llm_runtime = "MOCK"
+        return response
+
+
 def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     rows = [
         {"title": "shoe product", "description": "", "category": "Shoes"},
@@ -168,6 +177,21 @@ def test_run_evaluation_live_mode_and_runtime_breakdown(monkeypatch) -> None:
     assert aggregated["runtime_breakdown"]["fallback_mock_count"] == 1
     assert aggregated["runtime_breakdown"]["mock_count"] == 0
     assert aggregated["runtime_breakdown"]["fallback_rate"] == 0.5
+
+
+def test_run_evaluation_live_mode_treats_mock_runtime_as_fallback(monkeypatch) -> None:
+    rows = [
+        {"title": "live product", "description": "", "category": "Shoes"},
+    ]
+    monkeypatch.setattr(evaluate, "ReliabilityPipeline", FakeLiveWithMockRuntimePipeline)
+    monkeypatch.setattr(evaluate, "load_labeled_dataset", lambda: rows)
+
+    aggregated = evaluate.run_evaluation(use_mock=False)
+
+    assert aggregated["llm_runtime_mode"] == "LIVE"
+    assert aggregated["runtime_breakdown"]["live_count"] == 0
+    assert aggregated["runtime_breakdown"]["mock_count"] == 0
+    assert aggregated["runtime_breakdown"]["fallback_mock_count"] == 1
 
 
 def test_save_results_includes_runtime_breakdown(monkeypatch, tmp_path) -> None:
