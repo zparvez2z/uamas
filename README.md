@@ -76,7 +76,6 @@ Example:
 4. Run one clear and one ambiguous prediction through `POST /predict`.
 5. Confirm `reliability.llm_runtime` and diagnostics `last_runtime` show the expected live/fallback path.
 6. If a fallback path appears, capture the reason and include it in demo notes.
-
 ## Merge safety checklist
 - Keep each PR single-purpose (for example: evaluation logic, tests, or docs), instead of mixing concerns.
 - Rebase your branch on `main` before opening a PR and again before merge.
