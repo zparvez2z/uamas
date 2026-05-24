@@ -65,7 +65,7 @@ flowchart LR
 
 ## 4) Request Flow
 1. The browser submits a product title and description to `POST /predict`.
-2. `ReliabilityPipeline.predict()` creates a category score vector from a TF-IDF + logistic regression classifier trained on the processed training split. If scikit-learn or data files are unavailable, it falls back to the keyword scorer.
+2. `ReliabilityPipeline.predict()` creates a category score vector from a embedding-first (hashing+SVD) + logistic regression classifier trained on the processed training split. If scikit-learn or data files are unavailable, it falls back to the keyword scorer.
 3. The set builder keeps labels until cumulative probability crosses the calibrated cumulative-mass threshold computed on the calibration split.
 4. `GitHubModelsClient.extract_attributes()` calls the model or falls back to a deterministic extractor.
 5. The response is validated through the Pydantic models in `reliable_genai/models.py`.
@@ -87,7 +87,7 @@ flowchart LR
 - Returns the final response object.
 
 ### `reliable_genai/classifier.py`
-- Trains a TF-IDF + logistic regression classifier from `data/processed/train.json`.
+- Trains a embedding-first (hashing+SVD) + logistic regression classifier from `data/processed/train.json`.
 - Loads `artifacts/classifier.joblib` when a compatible artifact is present.
 - Can persist a freshly trained classifier artifact for repeatable startup behavior.
 - Returns class probabilities for prediction-set construction.
@@ -95,6 +95,7 @@ flowchart LR
 
 ### `scripts/train_classifier.py`
 - Rebuilds the classifier artifact from train and calibration splits.
+- Accepts `--model-type` to train either `embedding` (default) or `tfidf`.
 - Writes `artifacts/classifier.joblib` and a readable `artifacts/calibration.json` summary.
 
 ### `reliable_genai/calibration.py`
@@ -176,6 +177,7 @@ Behavior flags:
 - `MAX_SET_SIZE`
 - `LLM_MAX_RETRIES`
 - `ENABLE_ABSTAIN`
+- `CLASSIFIER_MODEL_TYPE` (`embedding` default, `tfidf` optional)
 
 ## 9) Suggested Evaluation
 The demo should be evaluated on:
@@ -225,7 +227,7 @@ The project is intended to work with public or synthetic product data. The CSV c
 
 ## 12) Next Technical Enhancements
 Possible next steps if the project is extended:
-- replace the TF-IDF classifier with an embedding-based classifier,
-- version trained model artifacts with metadata if multiple classifiers are compared,
+- add richer embedding backends (for example sentence-transformers) behind the current embedding-first interface,
+- version and compare trained model artifacts across classifier families with explicit metadata,
 - add a small evaluation notebook or report,
 - and add a results dashboard for coverage and abstention metrics.

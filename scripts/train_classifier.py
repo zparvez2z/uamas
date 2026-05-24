@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -26,12 +27,14 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_ARTIFACT_PATH.with_name("calibration.json"),
     )
     parser.add_argument("--alpha", type=float, default=0.3)
+    parser.add_argument("--model-type", choices=["embedding", "tfidf"], default="embedding")
     parser.add_argument("--force", action="store_true", help="Retrain even if an artifact already exists")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    os.environ["CLASSIFIER_MODEL_TYPE"] = args.model_type
     classifier = CalibratedTextClassifier(
         labels=ReliabilityPipeline.LABELS,
         alpha=args.alpha,
@@ -57,6 +60,7 @@ def main() -> None:
                 "cumulative_threshold": classifier.coverage_threshold,
                 "labels": classifier.labels,
                 "classifier_artifact": str(args.artifact_path),
+                "model_type": classifier.model_type,
             },
             handle,
             indent=2,
