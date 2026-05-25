@@ -90,6 +90,7 @@ flowchart LR
 - Trains a embedding-first (hashing+SVD) + logistic regression classifier from `data/processed/train.json`.
 - Loads `artifacts/classifier.joblib` when a compatible artifact is present.
 - Validates artifact metadata (row counts and dataset hashes) in strict mode by default before loading.
+- Enforces artifact contract fields (`artifact_format_version`, `classifier_family`, `model_type`, `sklearn_version`, `dataset_fingerprint_sha256`) before accepting artifact runtime.
 - Can persist a freshly trained classifier artifact for repeatable startup behavior.
 - Returns class probabilities for prediction-set construction.
 - Falls back cleanly when optional classifier dependencies or data are missing.

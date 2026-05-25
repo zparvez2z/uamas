@@ -18,6 +18,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_TRAIN_PATH = PROJECT_ROOT / "data" / "processed" / "train.json"
 DEFAULT_CALIBRATION_PATH = PROJECT_ROOT / "data" / "processed" / "calibration.json"
 DEFAULT_ARTIFACT_PATH = PROJECT_ROOT / "artifacts" / "classifier.joblib"
+ARTIFACT_FORMAT_VERSION = 1
+SUPPORTED_ARTIFACT_FORMAT_VERSIONS = {ARTIFACT_FORMAT_VERSION}
+CLASSIFIER_FAMILY = "logistic_regression_text"
 
 
 class CalibratedTextClassifier:
@@ -47,6 +50,7 @@ class CalibratedTextClassifier:
         self.artifact_metadata: dict[str, object] = {}
         self.strict_artifact_metadata = os.getenv("STRICT_ARTIFACT_METADATA", "true").lower() == "true"
         self.model_type = os.getenv("CLASSIFIER_MODEL_TYPE", "embedding").lower()
+        self.sklearn_version: str | None = None
 
         if prefer_artifact and self.artifact_path and self.artifact_path.exists() and self._load_artifact():
             return
@@ -63,6 +67,7 @@ class CalibratedTextClassifier:
 
     def _fit(self) -> None:
         try:
+            import sklearn
             from sklearn.decomposition import TruncatedSVD
             from sklearn.feature_extraction.text import HashingVectorizer, TfidfVectorizer
             from sklearn.linear_model import LogisticRegression
@@ -70,6 +75,7 @@ class CalibratedTextClassifier:
         except ImportError as exc:
             self.reason = f"sklearn unavailable: {exc}"
             return
+        self.sklearn_version = sklearn.__version__
 
         try:
             train_rows = self._load_rows(self.train_path)
@@ -235,6 +241,29 @@ class CalibratedTextClassifier:
         if not isinstance(artifact_metadata, dict):
             return False, "classifier artifact metadata missing or malformed in strict mode"
 
+        required_fields = [
+            "artifact_format_version",
+            "classifier_family",
+            "model_type",
+            "sklearn_version",
+            "dataset_fingerprint_sha256",
+            "train_row_count",
+            "calibration_row_count",
+            "train_data_sha256",
+            "calibration_data_sha256",
+        ]
+        for field in required_fields:
+            if field not in artifact_metadata:
+                return False, f"classifier artifact metadata missing required field: {field}"
+
+        artifact_format_version = artifact_metadata.get("artifact_format_version")
+        if artifact_format_version not in SUPPORTED_ARTIFACT_FORMAT_VERSIONS:
+            return False, f"classifier artifact format version mismatch: {artifact_format_version}"
+        if artifact_metadata.get("classifier_family") != CLASSIFIER_FAMILY:
+            return False, "classifier artifact family mismatch"
+        if artifact_metadata.get("model_type") != self.model_type:
+            return False, "classifier artifact model type mismatch"
+
         try:
             expected_train_rows = self._load_rows(self.train_path)
             expected_calibration_rows = self._load_rows(self.calibration_path)
@@ -254,6 +283,14 @@ class CalibratedTextClassifier:
             return False, "classifier artifact metadata train hash mismatch"
         if artifact_metadata.get("calibration_data_sha256") != expected_calibration_hash:
             return False, "classifier artifact metadata calibration hash mismatch"
+        expected_dataset_fingerprint = self._dataset_fingerprint(
+            expected_train_hash,
+            expected_calibration_hash,
+            expected_train_count,
+            expected_calibration_count,
+        )
+        if artifact_metadata.get("dataset_fingerprint_sha256") != expected_dataset_fingerprint:
+            return False, "classifier artifact metadata dataset fingerprint mismatch"
 
         return True, None
 
@@ -273,20 +310,43 @@ class CalibratedTextClassifier:
         normalized = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
         return hashlib.sha256(normalized).hexdigest()
 
+    @staticmethod
+    def _dataset_fingerprint(
+        train_hash: str | None,
+        calibration_hash: str | None,
+        train_count: int,
+        calibration_count: int,
+    ) -> str:
+        payload = f"{train_hash}:{calibration_hash}:{train_count}:{calibration_count}".encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
     def _build_artifact_metadata(
         self,
         train_rows: list[dict[str, str]],
         calibration_rows: list[dict[str, str]],
     ) -> dict[str, object]:
+        train_hash = self._rows_digest(train_rows) if train_rows else None
+        calibration_hash = self._rows_digest(calibration_rows) if calibration_rows else None
+        train_count = len(train_rows)
+        calibration_count = len(calibration_rows)
         return {
+            "artifact_format_version": ARTIFACT_FORMAT_VERSION,
+            "classifier_family": CLASSIFIER_FAMILY,
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "python_version": platform.python_version(),
+            "sklearn_version": self.sklearn_version,
             "train_path": str(self.train_path),
             "calibration_path": str(self.calibration_path),
-            "train_row_count": len(train_rows),
-            "calibration_row_count": len(calibration_rows),
-            "train_data_sha256": self._rows_digest(train_rows) if train_rows else None,
-            "calibration_data_sha256": self._rows_digest(calibration_rows) if calibration_rows else None,
+            "train_row_count": train_count,
+            "calibration_row_count": calibration_count,
+            "train_data_sha256": train_hash,
+            "calibration_data_sha256": calibration_hash,
+            "dataset_fingerprint_sha256": self._dataset_fingerprint(
+                train_hash,
+                calibration_hash,
+                train_count,
+                calibration_count,
+            ),
             "model_type": self.model_type,
             "embedding_model_id": "hashing_svd_256",
         }

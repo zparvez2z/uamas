@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import joblib
 import pytest
 
 from reliable_genai.classifier import CalibratedTextClassifier
@@ -211,6 +212,10 @@ def test_classifier_artifact_metadata_exposed_in_diagnostics(tmp_path: Path) -> 
     assert metadata["calibration_row_count"] == 2
     assert metadata["train_data_sha256"]
     assert metadata["calibration_data_sha256"]
+    assert metadata["artifact_format_version"] == 1
+    assert metadata["classifier_family"] == "logistic_regression_text"
+    assert metadata["dataset_fingerprint_sha256"]
+    assert metadata["sklearn_version"]
 
 
 
@@ -321,6 +326,78 @@ def test_classifier_strict_metadata_can_be_disabled_for_artifact_compatibility(
     )
 
     assert loaded.runtime == "ARTIFACT"
+
+
+def test_classifier_rejects_unsupported_artifact_version(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    write_rows(train_path, rows)
+    write_rows(calibration_path, rows)
+
+    CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+    payload = joblib.load(artifact_path)
+    payload["metadata"]["artifact_format_version"] = 999
+    joblib.dump(payload, artifact_path)
+
+    loaded = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+    )
+
+    assert loaded.runtime == "TRAINED"
+    assert loaded.reason == "model_type=embedding"
+
+
+def test_classifier_rejects_artifact_with_missing_required_metadata_field(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    write_rows(train_path, rows)
+    write_rows(calibration_path, rows)
+
+    CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+    payload = joblib.load(artifact_path)
+    payload["metadata"].pop("sklearn_version", None)
+    joblib.dump(payload, artifact_path)
+
+    loaded = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+    )
+
+    assert loaded.runtime == "TRAINED"
+    assert loaded.reason == "model_type=embedding"
 
 
 def test_calibration_computes_cumulative_threshold() -> None:

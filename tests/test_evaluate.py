@@ -17,6 +17,19 @@ class FakeClassifier:
             "artifact_path": None,
             "model_type": "embedding",
             "coverage_threshold": 0.7,
+            "artifact_metadata": {
+                "artifact_format_version": 1,
+                "classifier_family": "logistic_regression_text",
+                "model_type": "embedding",
+                "created_at_utc": "deterministic",
+                "python_version": "3.11.0",
+                "sklearn_version": "1.0.0",
+                "train_row_count": 3,
+                "calibration_row_count": 3,
+                "train_data_sha256": "trainhash",
+                "calibration_data_sha256": "calhash",
+                "dataset_fingerprint_sha256": "fphash",
+            },
         }
 
 
@@ -102,6 +115,8 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     assert aggregated["classifier_runtime"] == "TRAINED"
     assert aggregated["classifier_model_type"] == "embedding"
     assert aggregated["coverage_threshold"] == 0.7
+    assert aggregated["classifier_artifact_format_version"] == 1
+    assert aggregated["classifier_dataset_fingerprint"] == "fphash"
     assert aggregated["llm_runtime_mode"] == "MOCK"
     assert aggregated["runtime_breakdown"] == {
         "live_count": 0,
@@ -142,6 +157,8 @@ def test_save_results_is_stable_without_runtime(monkeypatch, tmp_path) -> None:
     assert "## LLM Runtime Breakdown" not in report
     assert "Runtime (ms)" not in report
     assert "avg_runtime_ms" not in report
+    assert "- Artifact Format Version: 1" in report
+    assert "- Dataset Fingerprint SHA-256: fphash" in report
 
 
 def test_compute_metrics_handles_selective_coverage() -> None:

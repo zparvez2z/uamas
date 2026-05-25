@@ -155,6 +155,7 @@ def run_evaluation(
     runtime_breakdown["fallback_rate"] = (
         round(runtime_breakdown["fallback_mock_count"] / len(results), 3) if results else 0.0
     )
+    artifact_metadata = classifier_diagnostics.get("artifact_metadata", {}) or {}
 
     return {
         "timestamp": datetime.now().isoformat() if include_runtime else DETERMINISTIC_TIMESTAMP,
@@ -169,7 +170,9 @@ def run_evaluation(
             deterministic=not include_runtime,
         ),
         "coverage_threshold": classifier_diagnostics["coverage_threshold"],
-        "classifier_artifact_metadata": classifier_diagnostics.get("artifact_metadata", {}),
+        "classifier_artifact_metadata": artifact_metadata,
+        "classifier_artifact_format_version": artifact_metadata.get("artifact_format_version"),
+        "classifier_dataset_fingerprint": artifact_metadata.get("dataset_fingerprint_sha256"),
         "llm_runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
         "results": results,
         "metrics": metrics,
@@ -211,12 +214,17 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
         metadata = aggregated.get("classifier_artifact_metadata") or {}
         if metadata:
             handle.write("## Artifact Provenance\n\n")
+            handle.write(f"- Artifact Format Version: {metadata.get('artifact_format_version')}\n")
+            handle.write(f"- Classifier Family: {metadata.get('classifier_family')}\n")
+            handle.write(f"- Model Type: {metadata.get('model_type')}\n")
             handle.write(f"- Created At (UTC): {metadata.get('created_at_utc')}\n")
             handle.write(f"- Python Version: {metadata.get('python_version')}\n")
+            handle.write(f"- scikit-learn Version: {metadata.get('sklearn_version')}\n")
             handle.write(f"- Train Rows: {metadata.get('train_row_count')}\n")
             handle.write(f"- Calibration Rows: {metadata.get('calibration_row_count')}\n")
             handle.write(f"- Train SHA-256: {metadata.get('train_data_sha256')}\n")
             handle.write(f"- Calibration SHA-256: {metadata.get('calibration_data_sha256')}\n\n")
+            handle.write(f"- Dataset Fingerprint SHA-256: {metadata.get('dataset_fingerprint_sha256')}\n\n")
 
         handle.write("## Summary Metrics\n\n")
         handle.write("| Metric | Value |\n")

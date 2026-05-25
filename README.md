@@ -93,5 +93,6 @@ Example:
 - Default classifier mode is **embedding-first** (`HashingVectorizer + TruncatedSVD + LogisticRegression`).
 - You can switch training/runtime mode with `CLASSIFIER_MODEL_TYPE=tfidf` for compatibility checks.
 - Artifact metadata validation is enabled by default. If train/calibration row counts or hashes drift, the artifact is rejected and the classifier retrains from dataset files.
+- Artifact metadata now includes a format version, classifier family, scikit-learn version, and dataset fingerprint for compatibility checks and auditability.
 - For emergency compatibility fallback, set `STRICT_ARTIFACT_METADATA=false` and rebuild a fresh artifact as soon as possible.
 - `GET /diagnostics` exposes `classifier_model_type`, `classifier_runtime`, and calibration threshold for demo verification.

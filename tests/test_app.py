@@ -11,3 +11,5 @@ def test_diagnostics_include_classifier_runtime_metadata() -> None:
     assert "classifier_model_type" in diagnostics
     assert isinstance(diagnostics["coverage_threshold"], float)
     assert "classifier_artifact_metadata" in diagnostics
+    assert "classifier_artifact_format_version" in diagnostics
+    assert "classifier_dataset_fingerprint" in diagnostics
