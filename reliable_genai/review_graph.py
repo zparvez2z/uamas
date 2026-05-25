@@ -26,6 +26,8 @@ class ReviewGraphContext:
     confidence_threshold: float = 0.55
     set_size_trigger: int = 3
     cache_ttl_seconds: int = 300
+    gate_strategy: str = "legacy"
+    very_low_confidence_floor: float = 0.35
 
 
 class ReviewGraphState(TypedDict, total=False):
@@ -44,6 +46,13 @@ def _parse_bool(value: str | None, default: bool) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
+def _normalize_gate_strategy(value: str | None) -> str:
+    candidate = (value or "legacy").strip().lower()
+    if candidate in {"legacy", "latency_v1"}:
+        return candidate
+    return "legacy"
+
+
 def _second_pass_cache_key(*args: Any, **kwargs: Any) -> str:
     state = args[0] if args else kwargs.get("state", {})
     item = state.get("item")
@@ -53,6 +62,8 @@ def _second_pass_cache_key(*args: Any, **kwargs: Any) -> str:
         "description": getattr(item, "description", ""),
         "confidence_threshold": config.get("confidence_threshold"),
         "set_size_trigger": config.get("set_size_trigger"),
+        "gate_strategy": config.get("gate_strategy"),
+        "very_low_confidence_floor": config.get("very_low_confidence_floor"),
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -68,6 +79,8 @@ class ReviewGraphRunner:
         confidence_threshold: float | None = None,
         set_size_trigger: int | None = None,
         cache_ttl_seconds: int | None = None,
+        gate_strategy: str | None = None,
+        very_low_confidence_floor: float | None = None,
         retry_max_attempts: int | None = None,
     ) -> None:
         self.pipeline = pipeline
@@ -76,6 +89,8 @@ class ReviewGraphRunner:
             confidence_threshold=confidence_threshold,
             set_size_trigger=set_size_trigger,
             cache_ttl_seconds=cache_ttl_seconds,
+            gate_strategy=gate_strategy,
+            very_low_confidence_floor=very_low_confidence_floor,
         )
         self.retry_max_attempts = retry_max_attempts or int(os.getenv("REVIEW_RETRY_MAX_ATTEMPTS", "2"))
         self.available = LANGGRAPH_AVAILABLE
@@ -108,6 +123,8 @@ class ReviewGraphRunner:
         confidence_threshold: float | None,
         set_size_trigger: int | None,
         cache_ttl_seconds: int | None,
+        gate_strategy: str | None,
+        very_low_confidence_floor: float | None,
     ) -> ReviewGraphContext:
         enabled_value = (
             enabled
@@ -129,11 +146,21 @@ class ReviewGraphRunner:
             if cache_ttl_seconds is not None
             else int(os.getenv("REVIEW_CACHE_TTL_SECONDS", "300"))
         )
+        gate_strategy_value = _normalize_gate_strategy(
+            gate_strategy if gate_strategy is not None else os.getenv("REVIEW_GATE_STRATEGY", "legacy")
+        )
+        very_low_confidence_floor_value = (
+            very_low_confidence_floor
+            if very_low_confidence_floor is not None
+            else float(os.getenv("REVIEW_VERY_LOW_CONFIDENCE_FLOOR", "0.35"))
+        )
         return ReviewGraphContext(
             enabled=enabled_value,
             confidence_threshold=confidence_value,
             set_size_trigger=set_size_value,
             cache_ttl_seconds=max(1, cache_ttl_value),
+            gate_strategy=gate_strategy_value,
+            very_low_confidence_floor=very_low_confidence_floor_value,
         )
 
     def _resolve_context(self, context: ReviewGraphContext | dict[str, Any] | None) -> ReviewGraphContext:
@@ -142,10 +169,18 @@ class ReviewGraphRunner:
         if isinstance(context, ReviewGraphContext):
             return context
         merged = asdict(self.default_context)
-        for key in ("enabled", "confidence_threshold", "set_size_trigger", "cache_ttl_seconds"):
+        for key in (
+            "enabled",
+            "confidence_threshold",
+            "set_size_trigger",
+            "cache_ttl_seconds",
+            "gate_strategy",
+            "very_low_confidence_floor",
+        ):
             if key in context and context[key] is not None:
                 merged[key] = context[key]
         merged["cache_ttl_seconds"] = max(1, int(merged["cache_ttl_seconds"]))
+        merged["gate_strategy"] = _normalize_gate_strategy(str(merged["gate_strategy"]))
         return ReviewGraphContext(**merged)
 
     def _compile_graph(self, cache_ttl_seconds: int) -> Any:
@@ -192,15 +227,30 @@ class ReviewGraphRunner:
     def _node_first_pass(self, state: ReviewGraphState) -> ReviewGraphState:
         return {"first_response": self.pipeline.predict(state["item"])}
 
+    def _compute_trigger_reason(self, first: PredictionResponse, context: ReviewGraphContext) -> str | None:
+        if context.gate_strategy == "latency_v1":
+            if first.reliability.abstained:
+                return "abstained"
+            if first.reliability.confidence < context.very_low_confidence_floor:
+                return "very_low_confidence"
+            if (
+                first.reliability.confidence < context.confidence_threshold
+                and first.reliability.set_size >= context.set_size_trigger
+            ):
+                return "low_confidence_large_set"
+            return None
+
+        if first.reliability.abstained:
+            return "abstained"
+        if first.reliability.confidence < context.confidence_threshold:
+            return "low_confidence"
+        if first.reliability.set_size >= context.set_size_trigger:
+            return "large_set"
+        return None
+
     def _node_gate(self, state: ReviewGraphState, runtime: Runtime[ReviewGraphContext]) -> ReviewGraphState:
         first = state["first_response"]
-        reason: str | None = None
-        if first.reliability.abstained:
-            reason = "abstained"
-        elif first.reliability.confidence < runtime.context.confidence_threshold:
-            reason = "low_confidence"
-        elif first.reliability.set_size >= runtime.context.set_size_trigger:
-            reason = "large_set"
+        reason = self._compute_trigger_reason(first, runtime.context)
 
         return {
             "review_trigger_reason": reason,
@@ -208,6 +258,8 @@ class ReviewGraphRunner:
             "cache_key_config": {
                 "confidence_threshold": runtime.context.confidence_threshold,
                 "set_size_trigger": runtime.context.set_size_trigger,
+                "gate_strategy": runtime.context.gate_strategy,
+                "very_low_confidence_floor": runtime.context.very_low_confidence_floor,
             },
         }
 
@@ -272,13 +324,7 @@ class ReviewGraphRunner:
 
     def _sequential_predict(self, item: ProductInput, context: ReviewGraphContext) -> PredictionResponse:
         first = self.pipeline.predict(item)
-        trigger_reason: str | None = None
-        if first.reliability.abstained:
-            trigger_reason = "abstained"
-        elif first.reliability.confidence < context.confidence_threshold:
-            trigger_reason = "low_confidence"
-        elif first.reliability.set_size >= context.set_size_trigger:
-            trigger_reason = "large_set"
+        trigger_reason = self._compute_trigger_reason(first, context)
 
         if trigger_reason is None:
             final = first.model_copy(deep=True)
@@ -368,6 +414,8 @@ class ReviewGraphRunner:
             "confidence_threshold": self.default_context.confidence_threshold,
             "set_size_trigger": self.default_context.set_size_trigger,
             "cache_ttl_seconds": self.default_context.cache_ttl_seconds,
+            "gate_strategy": self.default_context.gate_strategy,
+            "very_low_confidence_floor": self.default_context.very_low_confidence_floor,
             "review_graph_trigger_rate": round(triggered / enabled_requests, 3) if enabled_requests else 0.0,
             "review_graph_second_pass_rate": round(second_pass / enabled_requests, 3) if enabled_requests else 0.0,
             "review_graph_cache_hit_rate": round(cache_hit_steps / second_pass, 3) if second_pass else 0.0,

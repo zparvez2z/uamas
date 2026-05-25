@@ -56,6 +56,8 @@ Useful runtime flags:
 - `REVIEW_CONFIDENCE_THRESHOLD` (default `0.55`, second-pass trigger threshold)
 - `REVIEW_SET_SIZE_TRIGGER` (default `MAX_SET_SIZE`, second-pass trigger threshold)
 - `REVIEW_CACHE_TTL_SECONDS` (default `300`, TTL for cached review second-pass node results)
+- `REVIEW_GATE_STRATEGY` (`legacy` default, optional `latency_v1` for stricter review gating)
+- `REVIEW_VERY_LOW_CONFIDENCE_FLOOR` (default `0.35`, used by `latency_v1`)
 
 ## Demo inputs
 Use a clear case first, then an ambiguous one.

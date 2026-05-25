@@ -22,6 +22,8 @@ def test_diagnostics_include_classifier_runtime_metadata() -> None:
     assert "review_graph_reason" in diagnostics
     assert "review_graph_confidence_threshold" in diagnostics
     assert "review_graph_set_size_trigger" in diagnostics
+    assert "review_graph_gate_strategy" in diagnostics
+    assert "review_graph_very_low_confidence_floor" in diagnostics
     assert "review_graph_trigger_rate" in diagnostics
     assert "review_graph_second_pass_rate" in diagnostics
     assert "review_graph_cache_hit_rate" in diagnostics

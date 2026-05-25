@@ -4,39 +4,40 @@
 
 **Classifier:** embedding_logreg_calibrated
 
-**Classifier Runtime:** ARTIFACT
+**Classifier Runtime:** TRAINED
+
+**Artifact Load Status:** rejected
+
+**Artifact Rejection Reason:** classifier artifact alpha does not match runtime alpha
 
 **LLM Runtime:** MOCK
 
-## Review Graph Performance Check (2026-05-25)
+## Review Trigger Reduction Acceptance Check (2026-05-25)
 
-- Mode: `ENABLE_LANGGRAPH_REVIEW=true`, `USE_MOCK_LLM=true`
-- Input repeated 100 times (same product payload)
-- Backend: `langgraph` (available: `true`)
-- Trigger reason observed: review path triggered for all requests
-- Cold median latency (first 10): **37.067 ms**
-- Warm median latency (last 90): **38.285 ms**
-- Overall median latency (all 100): **38.183 ms**
-- Review trigger rate: **1.000**
-- Review second-pass rate: **1.000**
-- Review cache hit rate: **0.990** (`99` cached second-pass node hits)
+- Runtime mode: `USE_MOCK_LLM=true`, `ENABLE_LANGGRAPH_REVIEW=true`
+- Baseline config: `REVIEW_GATE_STRATEGY=legacy`, `REVIEW_SET_SIZE_TRIGGER=3`
+- Tuned config: `REVIEW_GATE_STRATEGY=latency_v1`, `REVIEW_SET_SIZE_TRIGGER=4`, `REVIEW_VERY_LOW_CONFIDENCE_FLOOR=0.35`
+- Baseline trigger rate: **0.419**
+- Tuned trigger rate: **0.065** (target: `<= 0.250`)
+- Baseline second-pass rate: **0.419**
+- Tuned second-pass rate: **0.065** (aligned with trigger rate)
+- Empirical coverage delta (`latency_v1 - legacy`): **0.000** (guardrail: no worse than `-0.010`)
 
-Result: cache hit behavior is working and second-pass execution remains bounded to triggered requests. Latency improvement after warmup was not observed materially in this run because first-pass work dominates request time.
+## Review Graph Tuning
 
-## Artifact Provenance
-
-- Artifact Format Version: 1
-- Classifier Family: logistic_regression_text
-- Model Type: embedding
-- Created At (UTC): 2026-05-25T12:37:16.313558+00:00
-- Python Version: 3.11.13
-- scikit-learn Version: 1.8.0
-- Train Rows: 125
-- Calibration Rows: 24
-- Train SHA-256: 8e6c1d77c258eec3870b158e71758053bc50f83501ce59700a8a60078f244b72
-- Calibration SHA-256: b172ad8c38c3922f2253a5f9eb557734846a97ffa3a252c023fe9cd574c0145f
-
-- Dataset Fingerprint SHA-256: 0b3df875bdd30a824a315810be9ef407a3b6320a4075ea7be84b52f6fe9e2255
+- Backend: langgraph
+- Available: True
+- Gate Strategy: latency_v1
+- Very Low Confidence Floor: 0.35
+- Trigger Rate: 0.065
+- Second-Pass Rate: 0.065
+- Cache Hit Rate: 0.000
+- Trigger Reasons:
+  - abstained: 0
+  - very_low_confidence: 2
+  - low_confidence_large_set: 0
+  - low_confidence: 0
+  - large_set: 0
 
 ## Summary Metrics
 
@@ -103,29 +104,39 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
   "total_products": 31,
   "classifier_mode": "embedding_logreg_calibrated",
   "classifier_ready": true,
-  "classifier_reason": null,
-  "classifier_runtime": "ARTIFACT",
+  "classifier_reason": "model_type=embedding",
+  "classifier_runtime": "TRAINED",
   "classifier_model_type": "embedding",
+  "classifier_artifact_load_attempted": true,
+  "classifier_artifact_load_status": "rejected",
+  "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
   "classifier_artifact_path": "artifacts/classifier.joblib",
   "coverage_threshold": 0.6197909946346115,
-  "classifier_artifact_metadata": {
-    "artifact_format_version": 1,
-    "classifier_family": "logistic_regression_text",
-    "created_at_utc": "2026-05-25T12:37:16.313558+00:00",
-    "python_version": "3.11.13",
-    "sklearn_version": "1.8.0",
-    "train_path": "/home/pz/projects/uamas/data/processed/train.json",
-    "calibration_path": "/home/pz/projects/uamas/data/processed/calibration.json",
-    "train_row_count": 125,
-    "calibration_row_count": 24,
-    "train_data_sha256": "8e6c1d77c258eec3870b158e71758053bc50f83501ce59700a8a60078f244b72",
-    "calibration_data_sha256": "b172ad8c38c3922f2253a5f9eb557734846a97ffa3a252c023fe9cd574c0145f",
-    "dataset_fingerprint_sha256": "0b3df875bdd30a824a315810be9ef407a3b6320a4075ea7be84b52f6fe9e2255",
-    "model_type": "embedding",
-    "embedding_model_id": "hashing_svd_256"
+  "classifier_artifact_metadata": {},
+  "classifier_artifact_format_version": null,
+  "classifier_dataset_fingerprint": null,
+  "review_graph_backend": "langgraph",
+  "review_graph_available": true,
+  "review_graph_gate_strategy": "latency_v1",
+  "review_graph_very_low_confidence_floor": 0.35,
+  "review_graph_trigger_rate": 0.065,
+  "review_graph_second_pass_rate": 0.065,
+  "review_graph_trigger_reason_counts": {
+    "abstained": 0,
+    "very_low_confidence": 2,
+    "low_confidence_large_set": 0,
+    "low_confidence": 0,
+    "large_set": 0
   },
-  "classifier_artifact_format_version": 1,
-  "classifier_dataset_fingerprint": "0b3df875bdd30a824a315810be9ef407a3b6320a4075ea7be84b52f6fe9e2255",
+  "review_graph_trigger_reason_rates": {
+    "abstained": 0.0,
+    "very_low_confidence": 0.065,
+    "low_confidence_large_set": 0.0,
+    "low_confidence": 0.0,
+    "large_set": 0.0
+  },
+  "review_graph_cache_hit_rate": 0.0,
+  "review_graph_cached_step_count": 0,
   "llm_runtime_mode": "MOCK",
   "results": [
     {
@@ -155,10 +166,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -190,10 +207,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -225,10 +248,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -261,10 +290,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -297,10 +332,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -333,10 +374,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -370,10 +417,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -405,10 +458,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -441,10 +500,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -478,10 +543,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -515,10 +586,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": "very_low_confidence",
+        "review_outcome": "first_pass_retained",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -551,10 +628,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -588,10 +671,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -623,10 +712,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -658,10 +753,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -694,10 +795,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -731,10 +838,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -767,10 +880,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -803,10 +922,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -838,10 +963,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -873,10 +1004,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -910,10 +1047,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -946,10 +1089,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -984,10 +1133,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": "very_low_confidence",
+        "review_outcome": "first_pass_retained",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -1020,10 +1175,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -1056,10 +1217,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -1091,10 +1258,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -1126,10 +1299,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -1161,10 +1340,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -1198,10 +1383,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false
@@ -1234,10 +1425,16 @@ Result: cache hit behavior is working and second-pass execution remains bounded 
         "policy_action": "set_output",
         "llm_runtime": "MOCK",
         "llm_model": "openai/gpt-4.1",
-        "classifier_runtime": "ARTIFACT",
-        "classifier_reason": null,
+        "classifier_runtime": "TRAINED",
+        "classifier_reason": "model_type=embedding",
         "classifier_artifact_path": "artifacts/classifier.joblib",
         "classifier_model_type": "embedding",
+        "classifier_artifact_load_attempted": true,
+        "classifier_artifact_load_status": "rejected",
+        "classifier_artifact_rejection_reason": "classifier artifact alpha does not match runtime alpha",
+        "review_graph_used": false,
+        "review_trigger_reason": null,
+        "review_outcome": "not_triggered",
         "coverage_threshold": 0.6197909946346115
       },
       "abstained": false

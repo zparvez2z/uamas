@@ -52,6 +52,8 @@ def build_diagnostics() -> dict:
         "review_graph_reason": review_diagnostics.get("reason"),
         "review_graph_confidence_threshold": review_diagnostics.get("confidence_threshold"),
         "review_graph_set_size_trigger": review_diagnostics.get("set_size_trigger"),
+        "review_graph_gate_strategy": review_diagnostics.get("gate_strategy"),
+        "review_graph_very_low_confidence_floor": review_diagnostics.get("very_low_confidence_floor"),
         "review_graph_trigger_rate": review_diagnostics.get("review_graph_trigger_rate"),
         "review_graph_second_pass_rate": review_diagnostics.get("review_graph_second_pass_rate"),
         "review_graph_cache_hit_rate": review_diagnostics.get("review_graph_cache_hit_rate"),

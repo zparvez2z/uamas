@@ -189,6 +189,8 @@ Behavior flags:
 - `REVIEW_CONFIDENCE_THRESHOLD` (default `0.55`)
 - `REVIEW_SET_SIZE_TRIGGER` (default `MAX_SET_SIZE`)
 - `REVIEW_CACHE_TTL_SECONDS` (default `300`, TTL for review graph second-pass node cache)
+- `REVIEW_GATE_STRATEGY` (`legacy` default, optional `latency_v1`)
+- `REVIEW_VERY_LOW_CONFIDENCE_FLOOR` (default `0.35`, used by `latency_v1`)
 
 ## 9) Suggested Evaluation
 The demo should be evaluated on:

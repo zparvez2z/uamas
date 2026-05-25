@@ -161,3 +161,96 @@ def test_invoke_context_overrides_env_defaults(monkeypatch) -> None:
 
     assert response.reliability.review_trigger_reason == "low_confidence"
     assert response.reliability.review_outcome == "second_pass_selected"
+
+
+def test_latency_v1_does_not_trigger_on_medium_low_confidence_small_set() -> None:
+    pipeline = StubPipeline([build_response(confidence=0.45, set_size=1)])
+    runner = ReviewGraphRunner(
+        pipeline,
+        enabled=True,
+        confidence_threshold=0.55,
+        set_size_trigger=3,
+        gate_strategy="latency_v1",
+        very_low_confidence_floor=0.35,
+    )
+
+    response = runner.predict(ProductInput(title="product", description="desc"))
+
+    assert pipeline.predict_calls == 1
+    assert pipeline.classify_calls == 0
+    assert response.reliability.review_trigger_reason is None
+    assert response.reliability.review_outcome == "not_triggered"
+
+
+def test_latency_v1_triggers_on_abstained_output() -> None:
+    pipeline = StubPipeline(
+        [build_response(confidence=0.9, set_size=0, abstained=True)],
+        second_pass_confidences=[0.8],
+    )
+    runner = ReviewGraphRunner(
+        pipeline,
+        enabled=True,
+        confidence_threshold=0.55,
+        set_size_trigger=3,
+        gate_strategy="latency_v1",
+        very_low_confidence_floor=0.35,
+    )
+
+    response = runner.predict(ProductInput(title="product", description="desc"))
+
+    assert pipeline.classify_calls == 1
+    assert response.reliability.review_trigger_reason == "abstained"
+
+
+def test_latency_v1_triggers_on_very_low_confidence_even_with_small_set() -> None:
+    pipeline = StubPipeline(
+        [build_response(confidence=0.2, set_size=1)],
+        second_pass_confidences=[0.8],
+    )
+    runner = ReviewGraphRunner(
+        pipeline,
+        enabled=True,
+        confidence_threshold=0.55,
+        set_size_trigger=3,
+        gate_strategy="latency_v1",
+        very_low_confidence_floor=0.35,
+    )
+
+    response = runner.predict(ProductInput(title="product", description="desc"))
+
+    assert pipeline.classify_calls == 1
+    assert response.reliability.review_trigger_reason == "very_low_confidence"
+
+
+def test_latency_v1_graph_and_sequential_trigger_decisions_match() -> None:
+    graph_pipeline = StubPipeline(
+        [build_response(confidence=0.45, set_size=3)],
+        second_pass_confidences=[0.8],
+    )
+    graph_runner = ReviewGraphRunner(
+        graph_pipeline,
+        enabled=True,
+        confidence_threshold=0.55,
+        set_size_trigger=3,
+        gate_strategy="latency_v1",
+        very_low_confidence_floor=0.35,
+    )
+    graph_response = graph_runner.predict(ProductInput(title="product", description="desc"))
+
+    sequential_pipeline = StubPipeline(
+        [build_response(confidence=0.45, set_size=3)],
+        second_pass_confidences=[0.8],
+    )
+    sequential_runner = ReviewGraphRunner(
+        sequential_pipeline,
+        enabled=True,
+        confidence_threshold=0.55,
+        set_size_trigger=3,
+        gate_strategy="latency_v1",
+        very_low_confidence_floor=0.35,
+    )
+    sequential_runner.available = False
+    sequential_response = sequential_runner.predict(ProductInput(title="product", description="desc"))
+
+    assert graph_response.reliability.review_trigger_reason == "low_confidence_large_set"
+    assert graph_response.reliability.review_trigger_reason == sequential_response.reliability.review_trigger_reason

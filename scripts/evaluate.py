@@ -83,7 +83,8 @@ def run_evaluation(
         "[INFO] Review graph: "
         f"enabled={review_diagnostics['enabled']} "
         f"available={review_diagnostics['available']} "
-        f"backend={review_diagnostics['backend']}"
+        f"backend={review_diagnostics['backend']} "
+        f"strategy={review_diagnostics['gate_strategy']}"
     )
 
     rows = load_labeled_dataset()
@@ -169,6 +170,21 @@ def run_evaluation(
         for result in results
         if result["reliability"].get("review_outcome") in {"second_pass_selected", "first_pass_retained"}
     )
+    known_trigger_reasons = (
+        "abstained",
+        "very_low_confidence",
+        "low_confidence_large_set",
+        "low_confidence",
+        "large_set",
+    )
+    review_trigger_reason_counts = {
+        reason: sum(1 for result in results if result["reliability"].get("review_trigger_reason") == reason)
+        for reason in known_trigger_reasons
+    }
+    review_trigger_reason_rates = {
+        reason: round(count / len(results), 3) if results else 0.0
+        for reason, count in review_trigger_reason_counts.items()
+    }
     review_diagnostics = review_graph.diagnostics()
     artifact_metadata = classifier_diagnostics.get("artifact_metadata", {}) or {}
 
@@ -193,8 +209,12 @@ def run_evaluation(
         "classifier_dataset_fingerprint": artifact_metadata.get("dataset_fingerprint_sha256"),
         "review_graph_backend": review_diagnostics["backend"],
         "review_graph_available": review_diagnostics["available"],
+        "review_graph_gate_strategy": review_diagnostics["gate_strategy"],
+        "review_graph_very_low_confidence_floor": review_diagnostics["very_low_confidence_floor"],
         "review_graph_trigger_rate": round(review_trigger_count / len(results), 3) if results else 0.0,
         "review_graph_second_pass_rate": round(review_second_pass_count / len(results), 3) if results else 0.0,
+        "review_graph_trigger_reason_counts": review_trigger_reason_counts,
+        "review_graph_trigger_reason_rates": review_trigger_reason_rates,
         "review_graph_cache_hit_rate": review_diagnostics["review_graph_cache_hit_rate"],
         "review_graph_cached_step_count": review_diagnostics["review_graph_cached_step_count"],
         "llm_runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
@@ -227,6 +247,27 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
                 f"**Artifact Rejection Reason:** {aggregated.get('classifier_artifact_rejection_reason')}\n\n"
             )
         handle.write(f"**LLM Runtime:** {aggregated['llm_runtime_mode']}\n\n")
+        handle.write("## Review Graph Tuning\n\n")
+        handle.write(f"- Backend: {aggregated.get('review_graph_backend')}\n")
+        handle.write(f"- Available: {aggregated.get('review_graph_available')}\n")
+        handle.write(f"- Gate Strategy: {aggregated.get('review_graph_gate_strategy')}\n")
+        handle.write(
+            f"- Very Low Confidence Floor: {aggregated.get('review_graph_very_low_confidence_floor')}\n"
+        )
+        handle.write(f"- Trigger Rate: {aggregated.get('review_graph_trigger_rate', 0.0):.3f}\n")
+        handle.write(f"- Second-Pass Rate: {aggregated.get('review_graph_second_pass_rate', 0.0):.3f}\n")
+        handle.write(f"- Cache Hit Rate: {aggregated.get('review_graph_cache_hit_rate', 0.0):.3f}\n")
+        trigger_reason_counts = aggregated.get("review_graph_trigger_reason_counts", {})
+        handle.write("- Trigger Reasons:\n")
+        for reason in (
+            "abstained",
+            "very_low_confidence",
+            "low_confidence_large_set",
+            "low_confidence",
+            "large_set",
+        ):
+            handle.write(f"  - {reason}: {trigger_reason_counts.get(reason, 0)}\n")
+        handle.write("\n")
 
         runtime_breakdown = aggregated.get("runtime_breakdown") or {}
         should_render_runtime_breakdown = (
