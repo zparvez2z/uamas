@@ -16,6 +16,14 @@ from reliable_genai.classifier import DEFAULT_ARTIFACT_PATH, DEFAULT_CALIBRATION
 from reliable_genai.pipeline import ReliabilityPipeline
 
 
+def resolve_default_alpha() -> float:
+    configured = os.getenv("ALPHA", "0.1")
+    try:
+        return float(configured)
+    except ValueError:
+        return 0.1
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--train-path", type=Path, default=DEFAULT_TRAIN_PATH)
@@ -26,7 +34,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_ARTIFACT_PATH.with_name("calibration.json"),
     )
-    parser.add_argument("--alpha", type=float, default=0.3)
+    parser.add_argument("--alpha", type=float, default=resolve_default_alpha())
     parser.add_argument("--model-type", choices=["embedding", "tfidf"], default="embedding")
     parser.add_argument("--force", action="store_true", help="Retrain even if an artifact already exists")
     return parser.parse_args()

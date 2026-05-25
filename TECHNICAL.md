@@ -175,7 +175,7 @@ Required:
 
 Behavior flags:
 - `USE_MOCK_LLM`
-- `ALPHA`
+- `ALPHA` (default `0.1`; also drives default `scripts/train_classifier.py` alpha when `--alpha` is omitted)
 - `MAX_SET_SIZE`
 - `LLM_MAX_RETRIES`
 - `ENABLE_ABSTAIN`

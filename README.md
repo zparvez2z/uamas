@@ -46,7 +46,7 @@ Required variables:
 
 Useful runtime flags:
 - `USE_MOCK_LLM`
-- `ALPHA`
+- `ALPHA` (pipeline default `0.1`; also used as the default for `scripts/train_classifier.py` unless `--alpha` is provided)
 - `MAX_SET_SIZE`
 - `LLM_MAX_RETRIES`
 - `ENABLE_ABSTAIN`
