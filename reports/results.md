@@ -8,6 +8,21 @@
 
 **LLM Runtime:** MOCK
 
+## Review Graph Performance Check (2026-05-25)
+
+- Mode: `ENABLE_LANGGRAPH_REVIEW=true`, `USE_MOCK_LLM=true`
+- Input repeated 100 times (same product payload)
+- Backend: `langgraph` (available: `true`)
+- Trigger reason observed: review path triggered for all requests
+- Cold median latency (first 10): **37.067 ms**
+- Warm median latency (last 90): **38.285 ms**
+- Overall median latency (all 100): **38.183 ms**
+- Review trigger rate: **1.000**
+- Review second-pass rate: **1.000**
+- Review cache hit rate: **0.990** (`99` cached second-pass node hits)
+
+Result: cache hit behavior is working and second-pass execution remains bounded to triggered requests. Latency improvement after warmup was not observed materially in this run because first-pass work dominates request time.
+
 ## Artifact Provenance
 
 - Artifact Format Version: 1
