@@ -4,6 +4,7 @@ from reliable_genai.classifier import CalibratedTextClassifier
 from reliable_genai.models import ClassifierResult, PredictionResponse, ProductAttributes, ReliabilityMeta
 from reliable_genai.evaluation import compute_metrics
 from scripts import evaluate
+import os
 
 
 class FakeClassifier:
@@ -270,6 +271,89 @@ def test_save_results_includes_runtime_breakdown(monkeypatch, tmp_path) -> None:
     assert "## LLM Runtime Breakdown" in report
     assert "- LIVE calls: 1" in report
     assert "- FALLBACK_MOCK calls: 1" in report
+
+
+def test_save_results_includes_review_acceptance_section(monkeypatch, tmp_path) -> None:
+    rows = [
+        {"title": "shoe product", "description": "", "category": "Shoes"},
+    ]
+    monkeypatch.setattr(evaluate, "ReliabilityPipeline", FakePipeline)
+    monkeypatch.setattr(evaluate, "load_labeled_dataset", lambda: rows)
+
+    aggregated = evaluate.run_evaluation(use_mock=True)
+    acceptance = {
+        "date": "2026-05-25",
+        "runtime_mode": "USE_MOCK_LLM=true, ENABLE_LANGGRAPH_REVIEW=true",
+        "baseline_config": {
+            "review_gate_strategy": "legacy",
+            "review_set_size_trigger": 3,
+        },
+        "tuned_config": {
+            "review_gate_strategy": "latency_v1",
+            "review_set_size_trigger": 4,
+            "review_very_low_confidence_floor": 0.35,
+        },
+        "baseline_trigger_rate": 0.581,
+        "tuned_trigger_rate": 0.097,
+        "trigger_rate_target": 0.25,
+        "baseline_second_pass_rate": 0.581,
+        "tuned_second_pass_rate": 0.097,
+        "baseline_empirical_coverage": 0.903,
+        "tuned_empirical_coverage": 0.903,
+        "coverage_delta": 0.0,
+        "coverage_delta_floor": -0.01,
+    }
+    output = tmp_path / "report.md"
+    evaluate.save_results(aggregated, output_path=str(output), review_acceptance_check=acceptance)
+    report = output.read_text(encoding="utf-8")
+
+    assert "## Review Trigger Reduction Acceptance Check (2026-05-25)" in report
+    assert "- Baseline trigger rate: **0.581**" in report
+    assert "- Tuned trigger rate: **0.097** (target: `<= 0.250`)" in report
+    assert "guardrail: no worse than `-0.010`" in report
+
+
+def test_run_review_trigger_acceptance_check_computes_comparison_and_restores_env(monkeypatch) -> None:
+    monkeypatch.setenv("REVIEW_GATE_STRATEGY", "original")
+    monkeypatch.setenv("REVIEW_SET_SIZE_TRIGGER", "99")
+    monkeypatch.setenv("REVIEW_VERY_LOW_CONFIDENCE_FLOOR", "0.99")
+    monkeypatch.setenv("ENABLE_LANGGRAPH_REVIEW", "false")
+
+    def fake_run_evaluation(use_mock=True, alpha=None, max_set_size=None, include_runtime=False):
+        gate = os.getenv("REVIEW_GATE_STRATEGY")
+        if gate == "legacy":
+            return {
+                "review_graph_trigger_rate": 0.6,
+                "review_graph_second_pass_rate": 0.6,
+                "metrics": {"empirical_coverage": 0.91},
+            }
+        if gate == "latency_v1":
+            return {
+                "review_graph_trigger_rate": 0.1,
+                "review_graph_second_pass_rate": 0.1,
+                "metrics": {"empirical_coverage": 0.905},
+            }
+        raise AssertionError(f"unexpected gate strategy: {gate}")
+
+    monkeypatch.setattr(evaluate, "run_evaluation", fake_run_evaluation)
+
+    result = evaluate.run_review_trigger_acceptance_check(use_mock=True)
+
+    assert result["baseline_trigger_rate"] == 0.6
+    assert result["tuned_trigger_rate"] == 0.1
+    assert result["baseline_second_pass_rate"] == 0.6
+    assert result["tuned_second_pass_rate"] == 0.1
+    assert result["coverage_delta"] == -0.005
+    assert result["trigger_rate_target"] == 0.25
+    assert result["coverage_delta_floor"] == -0.01
+    assert result["baseline_config"]["review_set_size_trigger"] == 3
+    assert result["tuned_config"]["review_set_size_trigger"] == 4
+    assert result["tuned_config"]["review_very_low_confidence_floor"] == 0.35
+
+    assert os.getenv("REVIEW_GATE_STRATEGY") == "original"
+    assert os.getenv("REVIEW_SET_SIZE_TRIGGER") == "99"
+    assert os.getenv("REVIEW_VERY_LOW_CONFIDENCE_FLOOR") == "0.99"
+    assert os.getenv("ENABLE_LANGGRAPH_REVIEW") == "false"
 
 
 def test_resolve_use_mock_defaults_to_mock() -> None:

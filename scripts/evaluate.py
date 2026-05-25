@@ -10,6 +10,7 @@ import time
 import argparse
 import copy
 from datetime import datetime
+from contextlib import contextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -22,6 +23,11 @@ from reliable_genai.evaluation import compute_metrics
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_TEST_PATH = PROJECT_ROOT / "data" / "processed" / "test.json"
+DEFAULT_ACCEPTANCE_BASELINE_SET_SIZE_TRIGGER = 3
+DEFAULT_ACCEPTANCE_TUNED_SET_SIZE_TRIGGER = 4
+DEFAULT_ACCEPTANCE_VERY_LOW_CONFIDENCE_FLOOR = 0.35
+DEFAULT_ACCEPTANCE_TRIGGER_RATE_TARGET = 0.25
+DEFAULT_ACCEPTANCE_COVERAGE_DELTA_FLOOR = -0.01
 
 
 def load_labeled_dataset(path: Path = DEFAULT_TEST_PATH) -> list[dict[str, str]]:
@@ -53,6 +59,67 @@ def resolve_use_mock(args: argparse.Namespace) -> bool:
     if args.mock:
         return True
     return True
+
+
+@contextmanager
+def temporary_env(overrides: dict[str, str | None]):
+    previous: dict[str, str | None] = {key: os.environ.get(key) for key in overrides}
+    try:
+        for key, value in overrides.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = str(value)
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def run_review_trigger_acceptance_check(use_mock: bool = True) -> dict[str, object]:
+    baseline_overrides = {
+        "ENABLE_LANGGRAPH_REVIEW": "true",
+        "REVIEW_GATE_STRATEGY": "legacy",
+        "REVIEW_SET_SIZE_TRIGGER": str(DEFAULT_ACCEPTANCE_BASELINE_SET_SIZE_TRIGGER),
+    }
+    tuned_overrides = {
+        "ENABLE_LANGGRAPH_REVIEW": "true",
+        "REVIEW_GATE_STRATEGY": "latency_v1",
+        "REVIEW_SET_SIZE_TRIGGER": str(DEFAULT_ACCEPTANCE_TUNED_SET_SIZE_TRIGGER),
+        "REVIEW_VERY_LOW_CONFIDENCE_FLOOR": str(DEFAULT_ACCEPTANCE_VERY_LOW_CONFIDENCE_FLOOR),
+    }
+
+    with temporary_env(baseline_overrides):
+        baseline = run_evaluation(use_mock=use_mock, include_runtime=False)
+    with temporary_env(tuned_overrides):
+        tuned = run_evaluation(use_mock=use_mock, include_runtime=False)
+
+    coverage_delta = round(tuned["metrics"]["empirical_coverage"] - baseline["metrics"]["empirical_coverage"], 3)
+    return {
+        "date": datetime.now().date().isoformat(),
+        "runtime_mode": f"USE_MOCK_LLM={'true' if use_mock else 'false'}, ENABLE_LANGGRAPH_REVIEW=true",
+        "baseline_config": {
+            "review_gate_strategy": "legacy",
+            "review_set_size_trigger": DEFAULT_ACCEPTANCE_BASELINE_SET_SIZE_TRIGGER,
+        },
+        "tuned_config": {
+            "review_gate_strategy": "latency_v1",
+            "review_set_size_trigger": DEFAULT_ACCEPTANCE_TUNED_SET_SIZE_TRIGGER,
+            "review_very_low_confidence_floor": DEFAULT_ACCEPTANCE_VERY_LOW_CONFIDENCE_FLOOR,
+        },
+        "baseline_trigger_rate": baseline["review_graph_trigger_rate"],
+        "tuned_trigger_rate": tuned["review_graph_trigger_rate"],
+        "trigger_rate_target": DEFAULT_ACCEPTANCE_TRIGGER_RATE_TARGET,
+        "baseline_second_pass_rate": baseline["review_graph_second_pass_rate"],
+        "tuned_second_pass_rate": tuned["review_graph_second_pass_rate"],
+        "baseline_empirical_coverage": baseline["metrics"]["empirical_coverage"],
+        "tuned_empirical_coverage": tuned["metrics"]["empirical_coverage"],
+        "coverage_delta": coverage_delta,
+        "coverage_delta_floor": DEFAULT_ACCEPTANCE_COVERAGE_DELTA_FLOOR,
+    }
 
 
 def run_evaluation(
@@ -228,7 +295,11 @@ def run_evaluation(
     }
 
 
-def save_results(aggregated: dict, output_path: str = "reports/results.md") -> None:
+def save_results(
+    aggregated: dict,
+    output_path: str = "reports/results.md",
+    review_acceptance_check: dict[str, object] | None = None,
+) -> None:
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     metrics = aggregated["metrics"]
     include_runtime = bool(aggregated.get("include_runtime", True))
@@ -238,6 +309,8 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
         report_payload["metrics"].pop("max_runtime_ms", None)
         for result in report_payload["results"]:
             result.pop("runtime_ms", None)
+    if review_acceptance_check:
+        report_payload["review_trigger_acceptance_check"] = review_acceptance_check
 
     with open(output_path, "w", encoding="utf-8") as handle:
         handle.write("# UAMAS Evaluation Results\n\n")
@@ -255,6 +328,41 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
                 f"**Artifact Rebuild Reason:** {aggregated.get('classifier_artifact_rebuild_reason')}\n\n"
             )
         handle.write(f"**LLM Runtime:** {aggregated['llm_runtime_mode']}\n\n")
+        if review_acceptance_check:
+            baseline_config = review_acceptance_check["baseline_config"]
+            tuned_config = review_acceptance_check["tuned_config"]
+            handle.write(f"## Review Trigger Reduction Acceptance Check ({review_acceptance_check['date']})\n\n")
+            handle.write(f"- Runtime mode: `{review_acceptance_check['runtime_mode']}`\n")
+            handle.write(
+                "- Baseline config: "
+                f"`REVIEW_GATE_STRATEGY={baseline_config['review_gate_strategy']}`, "
+                f"`REVIEW_SET_SIZE_TRIGGER={baseline_config['review_set_size_trigger']}`\n"
+            )
+            handle.write(
+                "- Tuned config: "
+                f"`REVIEW_GATE_STRATEGY={tuned_config['review_gate_strategy']}`, "
+                f"`REVIEW_SET_SIZE_TRIGGER={tuned_config['review_set_size_trigger']}`, "
+                f"`REVIEW_VERY_LOW_CONFIDENCE_FLOOR={tuned_config['review_very_low_confidence_floor']}`\n"
+            )
+            handle.write(f"- Baseline trigger rate: **{review_acceptance_check['baseline_trigger_rate']:.3f}**\n")
+            handle.write(
+                "- Tuned trigger rate: "
+                f"**{review_acceptance_check['tuned_trigger_rate']:.3f}** "
+                f"(target: `<= {review_acceptance_check['trigger_rate_target']:.3f}`)\n"
+            )
+            handle.write(
+                f"- Baseline second-pass rate: **{review_acceptance_check['baseline_second_pass_rate']:.3f}**\n"
+            )
+            handle.write(
+                "- Tuned second-pass rate: "
+                f"**{review_acceptance_check['tuned_second_pass_rate']:.3f}** "
+                "(aligned with trigger rate)\n"
+            )
+            handle.write(
+                "- Empirical coverage delta (`latency_v1 - legacy`): "
+                f"**{review_acceptance_check['coverage_delta']:.3f}** "
+                f"(guardrail: no worse than `{review_acceptance_check['coverage_delta_floor']:.3f}`)\n\n"
+            )
         handle.write("## Review Graph Tuning\n\n")
         handle.write(f"- Backend: {aggregated.get('review_graph_backend')}\n")
         handle.write(f"- Available: {aggregated.get('review_graph_available')}\n")
@@ -362,13 +470,27 @@ if __name__ == "__main__":
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--live", action="store_true", help="Run evaluation with USE_MOCK_LLM=false")
     mode_group.add_argument("--mock", action="store_true", help="Run evaluation with USE_MOCK_LLM=true (default)")
+    parser.add_argument(
+        "--with-review-acceptance-check",
+        action="store_true",
+        help="Run legacy vs latency_v1 benchmark and include acceptance section in report",
+    )
     parser.add_argument("--output", default="reports/results.md", help="Markdown report output path")
     args = parser.parse_args()
 
     try:
         use_mock = resolve_use_mock(args)
         aggregated_results = run_evaluation(use_mock=use_mock, include_runtime=args.include_runtime)
-        save_results(aggregated_results, output_path=args.output)
+        review_acceptance_check = (
+            run_review_trigger_acceptance_check(use_mock=use_mock)
+            if args.with_review_acceptance_check
+            else None
+        )
+        save_results(
+            aggregated_results,
+            output_path=args.output,
+            review_acceptance_check=review_acceptance_check,
+        )
 
         summary = aggregated_results["metrics"]
         print("\n" + "=" * 60)
