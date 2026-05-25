@@ -67,10 +67,11 @@ flowchart LR
 1. The browser submits a product title and description to `POST /predict`.
 2. `ReliabilityPipeline.predict()` creates a category score vector from a embedding-first (hashing+SVD) + logistic regression classifier trained on the processed training split. If scikit-learn or data files are unavailable, it falls back to the keyword scorer.
 3. The set builder keeps labels until cumulative probability crosses the calibrated cumulative-mass threshold computed on the calibration split.
-4. `GitHubModelsClient.extract_attributes()` calls the model or falls back to a deterministic extractor.
-5. The response is validated through the Pydantic models in `reliable_genai/models.py`.
-6. The FastAPI route serializes the full response for the template.
-7. `GET /diagnostics` reports runtime mode, endpoint, token presence, and the last inference path.
+4. Optional review mode (`ENABLE_LANGGRAPH_REVIEW=true`) can run a second prediction pass for abstained/low-confidence outputs and keeps the stronger result.
+5. `GitHubModelsClient.extract_attributes()` calls the model or falls back to a deterministic extractor.
+6. The response is validated through the Pydantic models in `reliable_genai/models.py`.
+7. The FastAPI route serializes the full response for the template.
+8. `GET /diagnostics` reports runtime mode, endpoint, token presence, and the last inference path.
 
 ## 5) Files and Responsibilities
 ### `app/main.py`
@@ -184,6 +185,10 @@ Behavior flags:
 - `ENABLE_ABSTAIN`
 - `CLASSIFIER_MODEL_TYPE` (`embedding` default, `tfidf` optional)
 - `STRICT_ARTIFACT_METADATA` (`true` default, set to `false` only for temporary compatibility fallback)
+- `ENABLE_LANGGRAPH_REVIEW` (`false` default, enables optional second-pass review flow)
+- `REVIEW_CONFIDENCE_THRESHOLD` (default `0.55`)
+- `REVIEW_SET_SIZE_TRIGGER` (default `MAX_SET_SIZE`)
+- `REVIEW_CACHE_TTL_SECONDS` (default `300`, TTL for review graph second-pass node cache)
 
 ## 9) Suggested Evaluation
 The demo should be evaluated on:

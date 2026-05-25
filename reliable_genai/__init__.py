@@ -2,5 +2,6 @@
 
 from .models import PredictionResponse, ReliabilityMeta, ProductInput
 from .pipeline import ReliabilityPipeline
+from .review_graph import ReviewGraphRunner
 
-__all__ = ["PredictionResponse", "ReliabilityMeta", "ProductInput", "ReliabilityPipeline"]
+__all__ = ["PredictionResponse", "ReliabilityMeta", "ProductInput", "ReliabilityPipeline", "ReviewGraphRunner"]

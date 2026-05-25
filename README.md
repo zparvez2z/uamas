@@ -52,6 +52,10 @@ Useful runtime flags:
 - `ENABLE_ABSTAIN`
 - `CLASSIFIER_MODEL_TYPE` (`embedding` default, optional `tfidf`)
 - `STRICT_ARTIFACT_METADATA` (`true` default; set to `false` to allow loading artifacts without dataset metadata checks)
+- `ENABLE_LANGGRAPH_REVIEW` (`false` default; enables optional second-pass review flow)
+- `REVIEW_CONFIDENCE_THRESHOLD` (default `0.55`, second-pass trigger threshold)
+- `REVIEW_SET_SIZE_TRIGGER` (default `MAX_SET_SIZE`, second-pass trigger threshold)
+- `REVIEW_CACHE_TTL_SECONDS` (default `300`, TTL for cached review second-pass node results)
 
 ## Demo inputs
 Use a clear case first, then an ambiguous one.
@@ -95,4 +99,5 @@ Example:
 - Artifact metadata validation is enabled by default. If train/calibration row counts or hashes drift, the artifact is rejected and the classifier retrains from dataset files.
 - Artifact metadata now includes a format version, classifier family, scikit-learn version, and dataset fingerprint for compatibility checks and auditability.
 - For emergency compatibility fallback, set `STRICT_ARTIFACT_METADATA=false` and rebuild a fresh artifact as soon as possible.
+- Optional LangGraph review mode can run a second pass for uncertain predictions when `ENABLE_LANGGRAPH_REVIEW=true`.
 - `GET /diagnostics` exposes `classifier_model_type`, `classifier_runtime`, and calibration threshold for demo verification.

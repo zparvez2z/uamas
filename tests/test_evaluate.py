@@ -1,4 +1,4 @@
-from reliable_genai.models import PredictionResponse, ProductAttributes, ReliabilityMeta
+from reliable_genai.models import ClassifierResult, PredictionResponse, ProductAttributes, ReliabilityMeta
 from reliable_genai.evaluation import compute_metrics
 from scripts import evaluate
 
@@ -48,6 +48,8 @@ class FakePipeline:
     alpha = 0.3
     classifier = FakeClassifier()
     llm = FakeLLM()
+    max_set_size = 3
+    enable_abstain = True
 
     def predict(self, product):
         if "ambiguous" in product.title:
@@ -77,6 +79,15 @@ class FakePipeline:
                 coverage_threshold=0.7,
             ),
         )
+
+    def _classify(self, product):
+        return ClassifierResult(
+            probabilities={"Shoes": 0.8, "Home": 0.2},
+            sorted_labels=["Shoes", "Home"],
+        )
+
+    def _conformal_set(self, result):
+        return [result.sorted_labels[0]]
 
 
 
@@ -124,6 +135,12 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     assert aggregated["classifier_artifact_format_version"] == 1
     assert aggregated["classifier_dataset_fingerprint"] == "fphash"
     assert aggregated["llm_runtime_mode"] == "MOCK"
+    assert aggregated["review_graph_available"] in {True, False}
+    assert aggregated["review_graph_backend"] in {"langgraph", "sequential"}
+    assert isinstance(aggregated["review_graph_trigger_rate"], float)
+    assert isinstance(aggregated["review_graph_second_pass_rate"], float)
+    assert isinstance(aggregated["review_graph_cache_hit_rate"], float)
+    assert isinstance(aggregated["review_graph_cached_step_count"], int)
     assert aggregated["runtime_breakdown"] == {
         "live_count": 0,
         "mock_count": 3,

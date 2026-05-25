@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from reliable_genai import ProductInput, ReliabilityPipeline
+from reliable_genai import ProductInput, ReliabilityPipeline, ReviewGraphRunner
 from reliable_genai.evaluation import compute_metrics
 
 
@@ -69,7 +69,9 @@ def run_evaluation(
 
     print("[INFO] Initializing pipeline...")
     pipeline = ReliabilityPipeline()
+    review_graph = ReviewGraphRunner(pipeline)
     classifier_diagnostics = pipeline.classifier.diagnostics()
+    review_diagnostics = review_graph.diagnostics()
     classifier_model_type = str(classifier_diagnostics.get("model_type") or "unknown")
     classifier_mode = f"{classifier_model_type}_logreg_calibrated" if pipeline.classifier.is_ready else "keyword_fallback"
     print(f"[INFO] Classifier mode: {classifier_mode}")
@@ -77,6 +79,12 @@ def run_evaluation(
     if pipeline.classifier.reason:
         print(f"[INFO] Classifier fallback reason: {pipeline.classifier.reason}")
     print(f"[INFO] LLM mode: {'MOCK' if pipeline.llm.use_mock else 'LIVE'}")
+    print(
+        "[INFO] Review graph: "
+        f"enabled={review_diagnostics['enabled']} "
+        f"available={review_diagnostics['available']} "
+        f"backend={review_diagnostics['backend']}"
+    )
 
     rows = load_labeled_dataset()
     results = []
@@ -91,7 +99,7 @@ def run_evaluation(
         print(f"[{idx}/{len(rows)}] Predicting: {product.title[:56]}")
 
         start = time.time()
-        response = pipeline.predict(product)
+        response = review_graph.predict(product)
         elapsed = time.time() - start
         runtime_ms = round(elapsed * 1000, 2) if include_runtime else 0.0
 
@@ -155,6 +163,13 @@ def run_evaluation(
     runtime_breakdown["fallback_rate"] = (
         round(runtime_breakdown["fallback_mock_count"] / len(results), 3) if results else 0.0
     )
+    review_trigger_count = sum(1 for result in results if result["reliability"].get("review_trigger_reason"))
+    review_second_pass_count = sum(
+        1
+        for result in results
+        if result["reliability"].get("review_outcome") in {"second_pass_selected", "first_pass_retained"}
+    )
+    review_diagnostics = review_graph.diagnostics()
     artifact_metadata = classifier_diagnostics.get("artifact_metadata", {}) or {}
 
     return {
@@ -176,6 +191,12 @@ def run_evaluation(
         "classifier_artifact_metadata": artifact_metadata,
         "classifier_artifact_format_version": artifact_metadata.get("artifact_format_version"),
         "classifier_dataset_fingerprint": artifact_metadata.get("dataset_fingerprint_sha256"),
+        "review_graph_backend": review_diagnostics["backend"],
+        "review_graph_available": review_diagnostics["available"],
+        "review_graph_trigger_rate": round(review_trigger_count / len(results), 3) if results else 0.0,
+        "review_graph_second_pass_rate": round(review_second_pass_count / len(results), 3) if results else 0.0,
+        "review_graph_cache_hit_rate": review_diagnostics["review_graph_cache_hit_rate"],
+        "review_graph_cached_step_count": review_diagnostics["review_graph_cached_step_count"],
         "llm_runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
         "results": results,
         "metrics": metrics,

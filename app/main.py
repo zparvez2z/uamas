@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 from reliable_genai.models import ProductInput
 from reliable_genai.pipeline import ReliabilityPipeline
+from reliable_genai.review_graph import ReviewGraphRunner
 
 load_dotenv()
 
@@ -17,11 +18,13 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 pipeline = ReliabilityPipeline()
+review_graph = ReviewGraphRunner(pipeline)
 
 
 def build_diagnostics() -> dict:
     token = os.getenv("GITHUB_TOKEN", "")
     classifier_diagnostics = pipeline.classifier.diagnostics()
+    review_diagnostics = review_graph.diagnostics()
     artifact_metadata = classifier_diagnostics.get("artifact_metadata", {}) or {}
     return {
         "status": "ok",
@@ -43,6 +46,16 @@ def build_diagnostics() -> dict:
         "classifier_artifact_metadata": artifact_metadata,
         "classifier_artifact_format_version": artifact_metadata.get("artifact_format_version"),
         "classifier_dataset_fingerprint": artifact_metadata.get("dataset_fingerprint_sha256"),
+        "review_graph_enabled": review_diagnostics.get("enabled"),
+        "review_graph_available": review_diagnostics.get("available"),
+        "review_graph_backend": review_diagnostics.get("backend"),
+        "review_graph_reason": review_diagnostics.get("reason"),
+        "review_graph_confidence_threshold": review_diagnostics.get("confidence_threshold"),
+        "review_graph_set_size_trigger": review_diagnostics.get("set_size_trigger"),
+        "review_graph_trigger_rate": review_diagnostics.get("review_graph_trigger_rate"),
+        "review_graph_second_pass_rate": review_diagnostics.get("review_graph_second_pass_rate"),
+        "review_graph_cache_hit_rate": review_diagnostics.get("review_graph_cache_hit_rate"),
+        "review_graph_cached_step_count": review_diagnostics.get("review_graph_cached_step_count"),
     }
 
 
@@ -71,7 +84,7 @@ def predict(
 ) -> HTMLResponse:
     try:
         payload = ProductInput(title=title, description=description)
-        prediction = pipeline.predict(payload)
+        prediction = review_graph.predict(payload)
         result_json = json.dumps(prediction.model_dump(), indent=2)
         return templates.TemplateResponse(
             request,
