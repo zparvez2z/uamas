@@ -1,0 +1,6 @@
+{
+  "alpha": 0.1,
+  "classifier_model_type": "embedding",
+  "strict_artifact_metadata": true,
+  "classifier_artifact_mismatch_policy": "auto_rebuild"
+}

@@ -12,6 +12,7 @@ import joblib
 
 from .calibration import calibrate_cumulative_threshold
 from .models import ClassifierResult, ProductInput
+from .runtime_profile import SUPPORTED_ARTIFACT_MISMATCH_POLICIES, SUPPORTED_CLASSIFIER_MODEL_TYPES
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -21,6 +22,19 @@ DEFAULT_ARTIFACT_PATH = PROJECT_ROOT / "artifacts" / "classifier.joblib"
 ARTIFACT_FORMAT_VERSION = 1
 SUPPORTED_ARTIFACT_FORMAT_VERSIONS = {ARTIFACT_FORMAT_VERSION}
 CLASSIFIER_FAMILY = "logistic_regression_text"
+
+
+def _parse_env_bool(value: str | bool | None, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    lowered = str(value).strip().lower()
+    if lowered in {"1", "true", "yes", "on"}:
+        return True
+    if lowered in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 class CalibratedTextClassifier:
@@ -35,6 +49,9 @@ class CalibratedTextClassifier:
         artifact_path: Optional[Path] = None,
         save_artifact: bool = False,
         prefer_artifact: bool = True,
+        model_type: str | None = None,
+        strict_artifact_metadata: bool | None = None,
+        artifact_mismatch_policy: str | None = None,
     ) -> None:
         self.labels = list(labels)
         self.alpha = alpha
@@ -48,21 +65,49 @@ class CalibratedTextClassifier:
         self.reason: Optional[str] = None
         self._model = None
         self.artifact_metadata: dict[str, object] = {}
-        self.strict_artifact_metadata = os.getenv("STRICT_ARTIFACT_METADATA", "true").lower() == "true"
-        self.model_type = os.getenv("CLASSIFIER_MODEL_TYPE", "embedding").lower()
+        configured_model_type = (
+            model_type if model_type is not None else os.getenv("CLASSIFIER_MODEL_TYPE", "embedding")
+        )
+        self.model_type = str(configured_model_type).strip().lower()
+        if self.model_type not in SUPPORTED_CLASSIFIER_MODEL_TYPES:
+            self.model_type = "embedding"
+        self.strict_artifact_metadata = (
+            strict_artifact_metadata
+            if strict_artifact_metadata is not None
+            else _parse_env_bool(os.getenv("STRICT_ARTIFACT_METADATA", "true"), default=True)
+        )
+        configured_policy = (
+            artifact_mismatch_policy
+            if artifact_mismatch_policy is not None
+            else os.getenv("CLASSIFIER_ARTIFACT_MISMATCH_POLICY", "auto_rebuild")
+        )
+        self.artifact_mismatch_policy = str(configured_policy).strip().lower()
+        if self.artifact_mismatch_policy not in SUPPORTED_ARTIFACT_MISMATCH_POLICIES:
+            self.artifact_mismatch_policy = "auto_rebuild"
         self.sklearn_version: str | None = None
         self.artifact_load_attempted = False
         self.artifact_load_status = "not_attempted"
         self.artifact_rejection_reason: str | None = None
+        self.artifact_rebuild_attempted = False
+        self.artifact_rebuild_status = "not_needed"
+        self.artifact_rebuild_reason: str | None = None
 
         if prefer_artifact:
             if self.artifact_path and self.artifact_path.exists():
                 self.artifact_load_attempted = True
                 if self._load_artifact():
                     self.artifact_load_status = "loaded"
+                    self.artifact_rebuild_status = "not_needed"
                     return
                 self.artifact_load_status = "rejected"
                 self.artifact_rejection_reason = self.reason
+                if self.artifact_mismatch_policy == "fail_fast":
+                    self.artifact_rebuild_status = "failed"
+                    self.artifact_rebuild_reason = self.reason
+                    raise RuntimeError(f"classifier artifact rejected under fail_fast policy: {self.reason}")
+                if self.artifact_mismatch_policy == "auto_rebuild":
+                    if self._auto_rebuild_artifact():
+                        return
             else:
                 self.artifact_load_status = "missing"
         else:
@@ -188,6 +233,36 @@ class CalibratedTextClassifier:
         self.reason = None
         self.artifact_rejection_reason = None
         return True
+
+    def _auto_rebuild_artifact(self) -> bool:
+        self.artifact_rebuild_attempted = True
+        initial_rejection_reason = self.artifact_rejection_reason
+        previous_save_artifact = self.save_artifact
+        self.save_artifact = True
+        try:
+            self._fit()
+        finally:
+            self.save_artifact = previous_save_artifact
+
+        if not self.is_ready:
+            self.artifact_rebuild_status = "failed"
+            self.artifact_rebuild_reason = self.reason
+            return False
+        if self.artifact_path is None or not self.artifact_path.exists():
+            self.artifact_rebuild_status = "failed"
+            self.artifact_rebuild_reason = "classifier artifact rebuild did not produce an artifact"
+            return False
+
+        if self._load_artifact():
+            self.artifact_load_status = "loaded"
+            self.artifact_rejection_reason = initial_rejection_reason
+            self.artifact_rebuild_status = "rebuilt"
+            self.artifact_rebuild_reason = None
+            return True
+
+        self.artifact_rebuild_status = "failed"
+        self.artifact_rebuild_reason = self.reason
+        return False
 
     def _save_artifact(self) -> None:
         if self.artifact_path is None or self._model is None:
@@ -321,6 +396,10 @@ class CalibratedTextClassifier:
             "artifact_load_attempted": self.artifact_load_attempted,
             "artifact_load_status": self.artifact_load_status,
             "artifact_rejection_reason": self.artifact_rejection_reason,
+            "artifact_rebuild_attempted": self.artifact_rebuild_attempted,
+            "artifact_rebuild_status": self.artifact_rebuild_status,
+            "artifact_rebuild_reason": self.artifact_rebuild_reason,
+            "artifact_mismatch_policy": self.artifact_mismatch_policy,
         }
 
     @staticmethod

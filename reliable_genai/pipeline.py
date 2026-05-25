@@ -4,6 +4,7 @@ from typing import Dict, List
 from .classifier import CalibratedTextClassifier
 from .llm_wrappers import GitHubModelsClient
 from .models import ClassifierResult, PredictionResponse, ProductInput, ReliabilityMeta
+from .runtime_profile import resolve_runtime_settings
 from .scoring import apply_abstention_policy, build_prediction_set
 
 
@@ -28,12 +29,33 @@ class ReliabilityPipeline:
         "Sports": ["fitness", "yoga", "dumbbell", "cycling", "ball"],
     }
 
-    def __init__(self) -> None:
-        self.alpha = float(os.getenv("ALPHA", "0.1"))
+    def __init__(
+        self,
+        *,
+        alpha: float | None = None,
+        classifier_model_type: str | None = None,
+        strict_artifact_metadata: bool | None = None,
+        classifier_artifact_mismatch_policy: str | None = None,
+    ) -> None:
+        settings = resolve_runtime_settings(
+            {
+                "alpha": alpha,
+                "classifier_model_type": classifier_model_type,
+                "strict_artifact_metadata": strict_artifact_metadata,
+                "classifier_artifact_mismatch_policy": classifier_artifact_mismatch_policy,
+            }
+        )
+        self.alpha = settings.alpha
         self.max_set_size = int(os.getenv("MAX_SET_SIZE", "3"))
         self.enable_abstain = os.getenv("ENABLE_ABSTAIN", "true").lower() == "true"
         self.llm = GitHubModelsClient()
-        self.classifier = CalibratedTextClassifier(self.LABELS, self.alpha)
+        self.classifier = CalibratedTextClassifier(
+            self.LABELS,
+            self.alpha,
+            model_type=settings.classifier_model_type,
+            strict_artifact_metadata=settings.strict_artifact_metadata,
+            artifact_mismatch_policy=settings.classifier_artifact_mismatch_policy,
+        )
 
     def predict(self, item: ProductInput) -> PredictionResponse:
         classifier_result = self._classify(item)
@@ -64,6 +86,11 @@ class ReliabilityPipeline:
             classifier_artifact_load_attempted=bool(classifier_diagnostics.get("artifact_load_attempted", False)),
             classifier_artifact_load_status=str(classifier_diagnostics.get("artifact_load_status", "not_attempted")),
             classifier_artifact_rejection_reason=classifier_diagnostics.get("artifact_rejection_reason"),
+            classifier_artifact_rebuild_attempted=bool(classifier_diagnostics.get("artifact_rebuild_attempted", False)),
+            classifier_artifact_rebuild_status=str(
+                classifier_diagnostics.get("artifact_rebuild_status", "not_needed")
+            ),
+            classifier_artifact_rebuild_reason=classifier_diagnostics.get("artifact_rebuild_reason"),
             coverage_threshold=float(classifier_diagnostics["coverage_threshold"]),
         )
 

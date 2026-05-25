@@ -44,14 +44,26 @@ Required variables:
 - `GITHUB_TOKEN`
 - `GITHUB_MODELS_MODEL`
 
+Classifier/runtime profile:
+- `RUNTIME_PROFILE_PATH` (default `config/runtime_profile.json`)
+- Profile file keys:
+  - `alpha` (default `0.1`)
+  - `classifier_model_type` (`embedding` default, optional `tfidf`)
+  - `strict_artifact_metadata` (`true` default)
+  - `classifier_artifact_mismatch_policy` (`auto_rebuild` default; optional `fail_fast`, `in_memory`)
+
+Classifier-critical config precedence is fixed across app and scripts:
+- CLI args (when present) > explicit env vars > runtime profile file > hardcoded defaults.
+
 Useful runtime flags:
 - `USE_MOCK_LLM`
-- `ALPHA` (pipeline default `0.1`; also used as the default for `scripts/train_classifier.py` unless `--alpha` is provided)
+- `ALPHA` (overrides profile `alpha`)
 - `MAX_SET_SIZE`
 - `LLM_MAX_RETRIES`
 - `ENABLE_ABSTAIN`
-- `CLASSIFIER_MODEL_TYPE` (`embedding` default, optional `tfidf`)
-- `STRICT_ARTIFACT_METADATA` (`true` default; set to `false` to allow loading artifacts without dataset metadata checks)
+- `CLASSIFIER_MODEL_TYPE` (overrides profile `classifier_model_type`)
+- `STRICT_ARTIFACT_METADATA` (overrides profile `strict_artifact_metadata`)
+- `CLASSIFIER_ARTIFACT_MISMATCH_POLICY` (overrides profile policy: `auto_rebuild`, `fail_fast`, `in_memory`)
 - `ENABLE_LANGGRAPH_REVIEW` (`false` default; enables optional second-pass review flow)
 - `REVIEW_CONFIDENCE_THRESHOLD` (default `0.55`, second-pass trigger threshold)
 - `REVIEW_SET_SIZE_TRIGGER` (default `MAX_SET_SIZE`, second-pass trigger threshold)
@@ -98,8 +110,11 @@ Example:
 ## Classifier runtime notes
 - Default classifier mode is **embedding-first** (`HashingVectorizer + TruncatedSVD + LogisticRegression`).
 - You can switch training/runtime mode with `CLASSIFIER_MODEL_TYPE=tfidf` for compatibility checks.
-- Artifact metadata validation is enabled by default. If train/calibration row counts or hashes drift, the artifact is rejected and the classifier retrains from dataset files.
+- Artifact metadata validation is enabled by default. If train/calibration row counts or hashes drift, behavior is controlled by `CLASSIFIER_ARTIFACT_MISMATCH_POLICY`.
 - Artifact metadata now includes a format version, classifier family, scikit-learn version, and dataset fingerprint for compatibility checks and auditability.
+- Default mismatch policy is `auto_rebuild`: on mismatch, the classifier retrains, rewrites the artifact, and reloads it so runtime ends in `ARTIFACT` when rebuild succeeds.
+- `fail_fast` raises immediately on mismatch.
+- `in_memory` preserves legacy behavior (reject artifact and continue with in-memory training only).
 - For emergency compatibility fallback, set `STRICT_ARTIFACT_METADATA=false` and rebuild a fresh artifact as soon as possible.
 - Optional LangGraph review mode can run a second pass for uncertain predictions when `ENABLE_LANGGRAPH_REVIEW=true`.
 - `GET /diagnostics` exposes `classifier_model_type`, `classifier_runtime`, and calibration threshold for demo verification.

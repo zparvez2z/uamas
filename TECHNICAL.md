@@ -92,14 +92,22 @@ flowchart LR
 - Loads `artifacts/classifier.joblib` when a compatible artifact is present.
 - Validates artifact metadata (row counts and dataset hashes) in strict mode by default before loading.
 - Enforces artifact contract fields (`artifact_format_version`, `classifier_family`, `model_type`, `sklearn_version`, `dataset_fingerprint_sha256`) before accepting artifact runtime.
+- Applies deterministic mismatch policy: `auto_rebuild` (default), `fail_fast`, or `in_memory`.
 - Can persist a freshly trained classifier artifact for repeatable startup behavior.
 - Returns class probabilities for prediction-set construction.
 - Falls back cleanly when optional classifier dependencies or data are missing.
+
+### `reliable_genai/runtime_profile.py`
+- Loads classifier-critical settings from `config/runtime_profile.json` (or `RUNTIME_PROFILE_PATH`).
+- Normalizes and validates `alpha`, `classifier_model_type`, `strict_artifact_metadata`, and `classifier_artifact_mismatch_policy`.
+- Provides one shared precedence chain across entrypoints:
+  - CLI args > explicit env vars > profile file > hardcoded defaults.
 
 ### `scripts/train_classifier.py`
 - Rebuilds the classifier artifact from train and calibration splits.
 - Accepts `--model-type` to train either `embedding` (default) or `tfidf`.
 - Writes `artifacts/classifier.joblib` and a readable `artifacts/calibration.json` summary.
+- Resolves classifier-critical defaults through the runtime profile loader.
 
 ### `reliable_genai/calibration.py`
 - Computes conformal cumulative-mass calibration thresholds from labeled calibration rows.
@@ -138,6 +146,12 @@ The response includes:
 - `classifier_runtime`
 - `classifier_reason`
 - `classifier_artifact_path`
+- `classifier_artifact_load_attempted`
+- `classifier_artifact_load_status`
+- `classifier_artifact_rejection_reason`
+- `classifier_artifact_rebuild_attempted`
+- `classifier_artifact_rebuild_status`
+- `classifier_artifact_rebuild_reason`
 - `coverage_threshold`
 
 These fields make the behavior explainable during a review or demo and also support regression checks when the pipeline changes.
@@ -154,6 +168,7 @@ These fields make the behavior explainable during a review or demo and also supp
 - whether artifact loading was attempted,
 - artifact load decision status (`loaded`, `rejected`, `missing`, or `disabled`),
 - artifact rejection reason when strict checks reject a candidate artifact,
+- artifact rebuild status and reason when auto-rebuild is active,
 - classifier readiness and fallback reason,
 - classifier artifact path,
 - and the active calibrated coverage threshold.
@@ -178,19 +193,24 @@ Required:
 - `GITHUB_MODELS_MODEL`
 
 Behavior flags:
+- `RUNTIME_PROFILE_PATH` (default `config/runtime_profile.json`)
 - `USE_MOCK_LLM`
-- `ALPHA` (default `0.1`; also drives default `scripts/train_classifier.py` alpha when `--alpha` is omitted)
+- `ALPHA` (overrides profile `alpha`)
 - `MAX_SET_SIZE`
 - `LLM_MAX_RETRIES`
 - `ENABLE_ABSTAIN`
-- `CLASSIFIER_MODEL_TYPE` (`embedding` default, `tfidf` optional)
-- `STRICT_ARTIFACT_METADATA` (`true` default, set to `false` only for temporary compatibility fallback)
+- `CLASSIFIER_MODEL_TYPE` (overrides profile `classifier_model_type`)
+- `STRICT_ARTIFACT_METADATA` (overrides profile `strict_artifact_metadata`)
+- `CLASSIFIER_ARTIFACT_MISMATCH_POLICY` (`auto_rebuild` default; optional `fail_fast`, `in_memory`)
 - `ENABLE_LANGGRAPH_REVIEW` (`false` default, enables optional second-pass review flow)
 - `REVIEW_CONFIDENCE_THRESHOLD` (default `0.55`)
 - `REVIEW_SET_SIZE_TRIGGER` (default `MAX_SET_SIZE`)
 - `REVIEW_CACHE_TTL_SECONDS` (default `300`, TTL for review graph second-pass node cache)
 - `REVIEW_GATE_STRATEGY` (`legacy` default, optional `latency_v1`)
 - `REVIEW_VERY_LOW_CONFIDENCE_FLOOR` (default `0.35`, used by `latency_v1`)
+
+Classifier-critical precedence across app and scripts:
+- CLI args (when available) > explicit env vars > runtime profile > hardcoded defaults.
 
 ## 9) Suggested Evaluation
 The demo should be evaluated on:

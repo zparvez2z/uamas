@@ -199,6 +199,9 @@ def run_evaluation(
         "classifier_artifact_load_attempted": classifier_diagnostics.get("artifact_load_attempted", False),
         "classifier_artifact_load_status": classifier_diagnostics.get("artifact_load_status", "not_attempted"),
         "classifier_artifact_rejection_reason": classifier_diagnostics.get("artifact_rejection_reason"),
+        "classifier_artifact_rebuild_attempted": classifier_diagnostics.get("artifact_rebuild_attempted", False),
+        "classifier_artifact_rebuild_status": classifier_diagnostics.get("artifact_rebuild_status", "not_needed"),
+        "classifier_artifact_rebuild_reason": classifier_diagnostics.get("artifact_rebuild_reason"),
         "classifier_artifact_path": display_path(
             classifier_diagnostics["artifact_path"],
             deterministic=not include_runtime,
@@ -245,6 +248,11 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
         if aggregated.get("classifier_artifact_rejection_reason"):
             handle.write(
                 f"**Artifact Rejection Reason:** {aggregated.get('classifier_artifact_rejection_reason')}\n\n"
+            )
+        handle.write(f"**Artifact Rebuild Status:** {aggregated.get('classifier_artifact_rebuild_status')}\n\n")
+        if aggregated.get("classifier_artifact_rebuild_reason"):
+            handle.write(
+                f"**Artifact Rebuild Reason:** {aggregated.get('classifier_artifact_rebuild_reason')}\n\n"
             )
         handle.write(f"**LLM Runtime:** {aggregated['llm_runtime_mode']}\n\n")
         handle.write("## Review Graph Tuning\n\n")

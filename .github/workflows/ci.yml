@@ -26,7 +26,11 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Train classifier artifact
-        run: python scripts/train_classifier.py --force --alpha 0.1
+        run: python scripts/train_classifier.py --force
+
+      - name: Verify classifier runtime consistency
+        run: |
+          python -c "from reliable_genai.pipeline import ReliabilityPipeline; p = ReliabilityPipeline(); d = p.classifier.diagnostics(); assert d['runtime'] == 'ARTIFACT', d; assert d.get('artifact_rejection_reason') is None, d"
 
       - name: Verify strict artifact compatibility checks
         run: python -m pytest tests/test_classifier.py -k "unsupported_artifact_version or missing_required_metadata_field"

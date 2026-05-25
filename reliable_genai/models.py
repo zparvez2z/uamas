@@ -32,6 +32,9 @@ class ReliabilityMeta(BaseModel):
     classifier_artifact_load_attempted: bool = False
     classifier_artifact_load_status: str = "not_attempted"
     classifier_artifact_rejection_reason: Optional[str] = None
+    classifier_artifact_rebuild_attempted: bool = False
+    classifier_artifact_rebuild_status: str = "not_needed"
+    classifier_artifact_rebuild_reason: Optional[str] = None
     review_graph_used: bool = False
     review_trigger_reason: Optional[str] = None
     review_outcome: Optional[str] = None

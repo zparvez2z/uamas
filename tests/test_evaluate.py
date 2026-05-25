@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from reliable_genai.classifier import CalibratedTextClassifier
 from reliable_genai.models import ClassifierResult, PredictionResponse, ProductAttributes, ReliabilityMeta
 from reliable_genai.evaluation import compute_metrics
 from scripts import evaluate
@@ -20,6 +23,9 @@ class FakeClassifier:
             "artifact_load_attempted": True,
             "artifact_load_status": "rejected",
             "artifact_rejection_reason": "classifier artifact metadata train hash mismatch",
+            "artifact_rebuild_attempted": True,
+            "artifact_rebuild_status": "rebuilt",
+            "artifact_rebuild_reason": None,
             "artifact_metadata": {
                 "artifact_format_version": 1,
                 "classifier_family": "logistic_regression_text",
@@ -131,6 +137,9 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     assert aggregated["classifier_artifact_load_attempted"] is True
     assert aggregated["classifier_artifact_load_status"] == "rejected"
     assert aggregated["classifier_artifact_rejection_reason"] == "classifier artifact metadata train hash mismatch"
+    assert aggregated["classifier_artifact_rebuild_attempted"] is True
+    assert aggregated["classifier_artifact_rebuild_status"] == "rebuilt"
+    assert aggregated["classifier_artifact_rebuild_reason"] is None
     assert aggregated["coverage_threshold"] == 0.7
     assert aggregated["classifier_artifact_format_version"] == 1
     assert aggregated["classifier_dataset_fingerprint"] == "fphash"
@@ -187,6 +196,7 @@ def test_save_results_is_stable_without_runtime(monkeypatch, tmp_path) -> None:
     assert "avg_runtime_ms" not in report
     assert "**Artifact Load Status:** rejected" in report
     assert "**Artifact Rejection Reason:** classifier artifact metadata train hash mismatch" in report
+    assert "**Artifact Rebuild Status:** rebuilt" in report
     assert "- Artifact Format Version: 1" in report
     assert "- Dataset Fingerprint SHA-256: fphash" in report
 
@@ -270,3 +280,40 @@ def test_resolve_use_mock_defaults_to_mock() -> None:
 def test_resolve_use_mock_live_overrides_default() -> None:
     args = evaluate.argparse.Namespace(live=True, mock=False)
     assert evaluate.resolve_use_mock(args) is False
+
+
+def test_run_evaluation_profile_defaults_load_artifact_without_mismatch(monkeypatch, tmp_path: Path) -> None:
+    artifact_path = tmp_path / "classifier.joblib"
+    rows = [
+        {"title": "shoe product", "description": "", "category": "Shoes"},
+    ]
+
+    # Build an artifact aligned to default runtime profile values.
+    CalibratedTextClassifier(
+        labels=[
+            "Shoes",
+            "Clothing",
+            "Electronics",
+            "Home",
+            "Beauty",
+            "Sports",
+        ],
+        alpha=0.1,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+
+    monkeypatch.setenv("USE_MOCK_LLM", "true")
+    monkeypatch.setenv("CLASSIFIER_ARTIFACT_PATH", str(artifact_path))
+    monkeypatch.setenv("CLASSIFIER_ARTIFACT_MISMATCH_POLICY", "auto_rebuild")
+    monkeypatch.delenv("ALPHA", raising=False)
+    monkeypatch.delenv("CLASSIFIER_MODEL_TYPE", raising=False)
+    monkeypatch.delenv("STRICT_ARTIFACT_METADATA", raising=False)
+    monkeypatch.setattr(evaluate, "load_labeled_dataset", lambda: rows)
+
+    aggregated = evaluate.run_evaluation(use_mock=True)
+
+    assert aggregated["classifier_runtime"] == "ARTIFACT"
+    assert aggregated["classifier_artifact_rejection_reason"] is None
+    assert aggregated["classifier_artifact_rebuild_status"] == "not_needed"

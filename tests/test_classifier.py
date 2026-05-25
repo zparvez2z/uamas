@@ -253,7 +253,7 @@ def test_classifier_strict_metadata_validation_detects_mismatch(tmp_path: Path) 
     assert "train" in reason
 
 
-def test_classifier_strict_metadata_blocks_mismatched_artifact_by_default(tmp_path: Path) -> None:
+def test_classifier_auto_rebuilds_mismatched_artifact_by_default(tmp_path: Path) -> None:
     train_path = tmp_path / "train.json"
     calibration_path = tmp_path / "calibration.json"
     artifact_path = tmp_path / "classifier.joblib"
@@ -289,12 +289,176 @@ def test_classifier_strict_metadata_blocks_mismatched_artifact_by_default(tmp_pa
         artifact_path=artifact_path,
     )
 
+    assert loaded.runtime == "ARTIFACT"
+    assert loaded.reason is None
+    assert loaded.artifact_load_attempted is True
+    assert loaded.artifact_load_status == "loaded"
+    assert loaded.artifact_rejection_reason is not None
+    assert loaded.artifact_rebuild_attempted is True
+    assert loaded.artifact_rebuild_status == "rebuilt"
+    assert loaded.artifact_rebuild_reason is None
+
+
+def test_classifier_rebuilt_artifact_loads_directly_on_next_startup(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    original_rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    changed_rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+        {"title": "tennis shoe", "description": "shoe court", "category": "Shoes"},
+    ]
+    write_rows(train_path, original_rows)
+    write_rows(calibration_path, original_rows)
+    CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+
+    write_rows(train_path, changed_rows)
+    write_rows(calibration_path, changed_rows)
+    rebuilt = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+    )
+    assert rebuilt.runtime == "ARTIFACT"
+    assert rebuilt.artifact_rebuild_status == "rebuilt"
+
+    loaded = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+    )
+    assert loaded.runtime == "ARTIFACT"
+    assert loaded.artifact_rebuild_attempted is False
+    assert loaded.artifact_rebuild_status == "not_needed"
+    assert loaded.artifact_rejection_reason is None
+
+
+def test_classifier_in_memory_policy_preserves_legacy_fallback_behavior(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    original_rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    changed_rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+        {"title": "tennis shoe", "description": "shoe court", "category": "Shoes"},
+    ]
+    write_rows(train_path, original_rows)
+    write_rows(calibration_path, original_rows)
+    CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+
+    write_rows(train_path, changed_rows)
+    write_rows(calibration_path, changed_rows)
+    loaded = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        artifact_mismatch_policy="in_memory",
+    )
+
     assert loaded.runtime == "TRAINED"
     assert loaded.reason == "model_type=embedding"
     assert loaded.artifact_load_attempted is True
     assert loaded.artifact_load_status == "rejected"
-    assert loaded.artifact_rejection_reason is not None
-    assert "metadata" in loaded.artifact_rejection_reason
+    assert loaded.artifact_rebuild_attempted is False
+    assert loaded.artifact_rebuild_status == "not_needed"
+
+
+def test_classifier_auto_rebuild_reports_failed_status_when_rebuild_fails(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "classifier.joblib"
+    joblib.dump(
+        {
+            "labels": ["Shoes", "Clothing"],
+            "alpha": 0.3,
+            "coverage_threshold": 0.8,
+            "metadata": {},
+            "model": object(),
+        },
+        artifact_path,
+    )
+
+    classifier = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=tmp_path / "missing-train.json",
+        calibration_path=tmp_path / "missing-calibration.json",
+        artifact_path=artifact_path,
+    )
+
+    assert classifier.runtime == "FALLBACK"
+    assert classifier.is_ready is False
+    assert classifier.artifact_load_attempted is True
+    assert classifier.artifact_load_status == "rejected"
+    assert classifier.artifact_rebuild_attempted is True
+    assert classifier.artifact_rebuild_status == "failed"
+    assert classifier.artifact_rebuild_reason is not None
+
+
+def test_classifier_fail_fast_policy_raises_on_mismatched_artifact(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    original_rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    changed_rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+        {"title": "tennis shoe", "description": "shoe court", "category": "Shoes"},
+    ]
+    write_rows(train_path, original_rows)
+    write_rows(calibration_path, original_rows)
+    CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+    write_rows(train_path, changed_rows)
+    write_rows(calibration_path, changed_rows)
+
+    with pytest.raises(RuntimeError, match="fail_fast policy"):
+        CalibratedTextClassifier(
+            labels=["Shoes", "Clothing"],
+            alpha=0.3,
+            train_path=train_path,
+            calibration_path=calibration_path,
+            artifact_path=artifact_path,
+            artifact_mismatch_policy="fail_fast",
+        )
 
 
 def test_classifier_strict_metadata_can_be_disabled_for_artifact_compatibility(
@@ -375,8 +539,10 @@ def test_classifier_rejects_unsupported_artifact_version(tmp_path: Path) -> None
         artifact_path=artifact_path,
     )
 
-    assert loaded.runtime == "TRAINED"
-    assert loaded.reason == "model_type=embedding"
+    assert loaded.runtime == "ARTIFACT"
+    assert loaded.reason is None
+    assert loaded.artifact_rebuild_attempted is True
+    assert loaded.artifact_rebuild_status == "rebuilt"
 
 
 def test_classifier_rejects_artifact_with_missing_required_metadata_field(tmp_path: Path) -> None:
@@ -411,8 +577,10 @@ def test_classifier_rejects_artifact_with_missing_required_metadata_field(tmp_pa
         artifact_path=artifact_path,
     )
 
-    assert loaded.runtime == "TRAINED"
-    assert loaded.reason == "model_type=embedding"
+    assert loaded.runtime == "ARTIFACT"
+    assert loaded.reason is None
+    assert loaded.artifact_rebuild_attempted is True
+    assert loaded.artifact_rebuild_status == "rebuilt"
 
 
 def test_calibration_computes_cumulative_threshold() -> None:

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -14,14 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from reliable_genai.classifier import CalibratedTextClassifier
 from reliable_genai.classifier import DEFAULT_ARTIFACT_PATH, DEFAULT_CALIBRATION_PATH, DEFAULT_TRAIN_PATH
 from reliable_genai.pipeline import ReliabilityPipeline
-
-
-def resolve_default_alpha() -> float:
-    configured = os.getenv("ALPHA", "0.1")
-    try:
-        return float(configured)
-    except ValueError:
-        return 0.1
+from reliable_genai.runtime_profile import resolve_runtime_settings
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,23 +26,31 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_ARTIFACT_PATH.with_name("calibration.json"),
     )
-    parser.add_argument("--alpha", type=float, default=resolve_default_alpha())
-    parser.add_argument("--model-type", choices=["embedding", "tfidf"], default="embedding")
+    parser.add_argument("--alpha", type=float, default=None)
+    parser.add_argument("--model-type", choices=["embedding", "tfidf"], default=None)
     parser.add_argument("--force", action="store_true", help="Retrain even if an artifact already exists")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    os.environ["CLASSIFIER_MODEL_TYPE"] = args.model_type
+    settings = resolve_runtime_settings(
+        {
+            "alpha": args.alpha,
+            "classifier_model_type": args.model_type,
+        }
+    )
     classifier = CalibratedTextClassifier(
         labels=ReliabilityPipeline.LABELS,
-        alpha=args.alpha,
+        alpha=settings.alpha,
         train_path=args.train_path,
         calibration_path=args.calibration_path,
         artifact_path=args.artifact_path,
         save_artifact=True,
         prefer_artifact=not args.force,
+        model_type=settings.classifier_model_type,
+        strict_artifact_metadata=settings.strict_artifact_metadata,
+        artifact_mismatch_policy=settings.classifier_artifact_mismatch_policy,
     )
 
     if not classifier.is_ready:
