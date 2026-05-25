@@ -26,7 +26,13 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Train classifier artifact
-        run: python scripts/train_classifier.py --force
+        run: python scripts/train_classifier.py --force --alpha 0.1
+
+      - name: Verify strict artifact compatibility checks
+        run: python -m pytest tests/test_classifier.py -k "unsupported_artifact_version or missing_required_metadata_field"
+
+      - name: Verify strict-mode opt-out compatibility
+        run: python -m pytest tests/test_classifier.py -k "strict_metadata_can_be_disabled_for_artifact_compatibility or pipeline_loads_classifier_artifact_with_opt_out"
 
       - name: Run tests
         run: python -m pytest

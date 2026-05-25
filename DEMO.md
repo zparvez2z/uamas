@@ -192,3 +192,11 @@ If metrics show:
 3. Run a clear example and verify `reliability.llm_runtime` plus diagnostics `last_runtime`.
 4. Run an ambiguous example and confirm policy metadata (`set_size`, `abstained`, `reason`).
 5. If fallback occurs, call it out explicitly during the demo as graceful degradation.
+
+## Artifact Compatibility Check (90 seconds)
+1. Confirm artifact contract fields are present:
+   `curl -s http://127.0.0.1:8000/diagnostics | python -m json.tool | rg "classifier_artifact_format_version|classifier_dataset_fingerprint|classifier_runtime"`
+2. Expect `classifier_runtime` to be `ARTIFACT` or `TRAINED` and `classifier_artifact_format_version` to be non-null when artifact metadata is loaded.
+3. If a stale artifact is detected, diagnostics should show `classifier_runtime: "TRAINED"` with a metadata mismatch reason; this confirms strict validation rejected the artifact and retrained.
+4. Emergency fallback (temporary only):
+   `STRICT_ARTIFACT_METADATA=false USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload`
