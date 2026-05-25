@@ -17,10 +17,10 @@
 - Runtime mode: `USE_MOCK_LLM=true`, `ENABLE_LANGGRAPH_REVIEW=true`
 - Baseline config: `REVIEW_GATE_STRATEGY=legacy`, `REVIEW_SET_SIZE_TRIGGER=3`
 - Tuned config: `REVIEW_GATE_STRATEGY=latency_v1`, `REVIEW_SET_SIZE_TRIGGER=4`, `REVIEW_VERY_LOW_CONFIDENCE_FLOOR=0.35`
-- Baseline trigger rate: **0.419**
-- Tuned trigger rate: **0.065** (target: `<= 0.250`)
-- Baseline second-pass rate: **0.419**
-- Tuned second-pass rate: **0.065** (aligned with trigger rate)
+- Baseline trigger rate: **0.581**
+- Tuned trigger rate: **0.097** (target: `<= 0.250`)
+- Baseline second-pass rate: **0.581**
+- Tuned second-pass rate: **0.097** (aligned with trigger rate)
 - Empirical coverage delta (`latency_v1 - legacy`): **0.000** (guardrail: no worse than `-0.010`)
 
 ## Review Graph Tuning
@@ -44,7 +44,7 @@
 - Artifact Format Version: 1
 - Classifier Family: logistic_regression_text
 - Model Type: embedding
-- Created At (UTC): 2026-05-25T19:35:30.064793+00:00
+- Created At (UTC): 2026-05-25T20:19:50.244650+00:00
 - Python Version: 3.11.13
 - scikit-learn Version: 1.8.0
 - Train Rows: 125
@@ -133,7 +133,7 @@
   "classifier_artifact_metadata": {
     "artifact_format_version": 1,
     "classifier_family": "logistic_regression_text",
-    "created_at_utc": "2026-05-25T19:35:30.064793+00:00",
+    "created_at_utc": "2026-05-25T20:19:50.244650+00:00",
     "python_version": "3.11.13",
     "sklearn_version": "1.8.0",
     "train_path": "/home/pz/projects/uamas/data/processed/train.json",
