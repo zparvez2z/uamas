@@ -45,7 +45,7 @@ class CalibratedTextClassifier:
         self.reason: Optional[str] = None
         self._model = None
         self.artifact_metadata: dict[str, object] = {}
-        self.strict_artifact_metadata = os.getenv("STRICT_ARTIFACT_METADATA", "false").lower() == "true"
+        self.strict_artifact_metadata = os.getenv("STRICT_ARTIFACT_METADATA", "true").lower() == "true"
         self.model_type = os.getenv("CLASSIFIER_MODEL_TYPE", "embedding").lower()
 
         if prefer_artifact and self.artifact_path and self.artifact_path.exists() and self._load_artifact():

@@ -89,6 +89,7 @@ flowchart LR
 ### `reliable_genai/classifier.py`
 - Trains a embedding-first (hashing+SVD) + logistic regression classifier from `data/processed/train.json`.
 - Loads `artifacts/classifier.joblib` when a compatible artifact is present.
+- Validates artifact metadata (row counts and dataset hashes) in strict mode by default before loading.
 - Can persist a freshly trained classifier artifact for repeatable startup behavior.
 - Returns class probabilities for prediction-set construction.
 - Falls back cleanly when optional classifier dependencies or data are missing.
@@ -178,6 +179,7 @@ Behavior flags:
 - `LLM_MAX_RETRIES`
 - `ENABLE_ABSTAIN`
 - `CLASSIFIER_MODEL_TYPE` (`embedding` default, `tfidf` optional)
+- `STRICT_ARTIFACT_METADATA` (`true` default, set to `false` only for temporary compatibility fallback)
 
 ## 9) Suggested Evaluation
 The demo should be evaluated on:

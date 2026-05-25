@@ -108,8 +108,8 @@ def test_classifier_artifact_round_trip_preserves_predictions(tmp_path: Path) ->
     loaded = CalibratedTextClassifier(
         labels=["Shoes", "Clothing"],
         alpha=0.3,
-        train_path=tmp_path / "missing-train.json",
-        calibration_path=tmp_path / "missing-calibration.json",
+        train_path=train_path,
+        calibration_path=calibration_path,
         artifact_path=artifact_path,
     )
     item = ProductInput(title="lightweight running shoe", description="grippy sole")
@@ -121,7 +121,7 @@ def test_classifier_artifact_round_trip_preserves_predictions(tmp_path: Path) ->
     assert loaded.predict(item).probabilities == pytest.approx(trained.predict(item).probabilities)
 
 
-def test_pipeline_loads_classifier_artifact(monkeypatch, tmp_path: Path) -> None:
+def test_pipeline_loads_classifier_artifact_with_opt_out(monkeypatch, tmp_path: Path) -> None:
     train_path = tmp_path / "train.json"
     calibration_path = tmp_path / "calibration.json"
     artifact_path = tmp_path / "classifier.joblib"
@@ -146,6 +146,7 @@ def test_pipeline_loads_classifier_artifact(monkeypatch, tmp_path: Path) -> None
     monkeypatch.setenv("ALPHA", "0.3")
     monkeypatch.setenv("USE_MOCK_LLM", "true")
     monkeypatch.setenv("CLASSIFIER_ARTIFACT_PATH", str(artifact_path))
+    monkeypatch.setenv("STRICT_ARTIFACT_METADATA", "false")
 
     pipeline = ReliabilityPipeline()
 
@@ -196,8 +197,8 @@ def test_classifier_artifact_metadata_exposed_in_diagnostics(tmp_path: Path) -> 
     loaded = CalibratedTextClassifier(
         labels=["Shoes", "Clothing"],
         alpha=0.3,
-        train_path=tmp_path / "missing-train.json",
-        calibration_path=tmp_path / "missing-calibration.json",
+        train_path=train_path,
+        calibration_path=calibration_path,
         artifact_path=artifact_path,
     )
 
@@ -237,6 +238,89 @@ def test_classifier_strict_metadata_validation_detects_mismatch(tmp_path: Path) 
     assert compatible is False
     assert reason is not None
     assert "train" in reason
+
+
+def test_classifier_strict_metadata_blocks_mismatched_artifact_by_default(tmp_path: Path) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    original_rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    changed_rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+        {"title": "tennis shoe", "description": "shoe court", "category": "Shoes"},
+    ]
+    write_rows(train_path, original_rows)
+    write_rows(calibration_path, original_rows)
+
+    CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+
+    write_rows(train_path, changed_rows)
+    write_rows(calibration_path, changed_rows)
+    loaded = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+    )
+
+    assert loaded.runtime == "TRAINED"
+    assert loaded.reason == "model_type=embedding"
+
+
+def test_classifier_strict_metadata_can_be_disabled_for_artifact_compatibility(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    train_path = tmp_path / "train.json"
+    calibration_path = tmp_path / "calibration.json"
+    artifact_path = tmp_path / "classifier.joblib"
+    original_rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+    ]
+    changed_rows = [
+        {"title": "running shoe", "description": "shoe sole", "category": "Shoes"},
+        {"title": "cotton shirt", "description": "shirt apparel", "category": "Clothing"},
+        {"title": "tennis shoe", "description": "shoe court", "category": "Shoes"},
+    ]
+    write_rows(train_path, original_rows)
+    write_rows(calibration_path, original_rows)
+
+    CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+        save_artifact=True,
+        prefer_artifact=False,
+    )
+
+    write_rows(train_path, changed_rows)
+    write_rows(calibration_path, changed_rows)
+    monkeypatch.setenv("STRICT_ARTIFACT_METADATA", "false")
+    loaded = CalibratedTextClassifier(
+        labels=["Shoes", "Clothing"],
+        alpha=0.3,
+        train_path=train_path,
+        calibration_path=calibration_path,
+        artifact_path=artifact_path,
+    )
+
+    assert loaded.runtime == "ARTIFACT"
 
 
 def test_calibration_computes_cumulative_threshold() -> None:

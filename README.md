@@ -51,6 +51,7 @@ Useful runtime flags:
 - `LLM_MAX_RETRIES`
 - `ENABLE_ABSTAIN`
 - `CLASSIFIER_MODEL_TYPE` (`embedding` default, optional `tfidf`)
+- `STRICT_ARTIFACT_METADATA` (`true` default; set to `false` to allow loading artifacts without dataset metadata checks)
 
 ## Demo inputs
 Use a clear case first, then an ambiguous one.
@@ -91,4 +92,6 @@ Example:
 ## Classifier runtime notes
 - Default classifier mode is **embedding-first** (`HashingVectorizer + TruncatedSVD + LogisticRegression`).
 - You can switch training/runtime mode with `CLASSIFIER_MODEL_TYPE=tfidf` for compatibility checks.
+- Artifact metadata validation is enabled by default. If train/calibration row counts or hashes drift, the artifact is rejected and the classifier retrains from dataset files.
+- For emergency compatibility fallback, set `STRICT_ARTIFACT_METADATA=false` and rebuild a fresh artifact as soon as possible.
 - `GET /diagnostics` exposes `classifier_model_type`, `classifier_runtime`, and calibration threshold for demo verification.
