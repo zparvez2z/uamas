@@ -29,6 +29,9 @@ class ReliabilityMeta(BaseModel):
     classifier_reason: Optional[str] = None
     classifier_artifact_path: Optional[str] = None
     classifier_model_type: Optional[str] = None
+    classifier_artifact_load_attempted: bool = False
+    classifier_artifact_load_status: str = "not_attempted"
+    classifier_artifact_rejection_reason: Optional[str] = None
     coverage_threshold: float
 
 

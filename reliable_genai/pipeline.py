@@ -61,6 +61,9 @@ class ReliabilityPipeline:
             classifier_reason=classifier_diagnostics["reason"],
             classifier_artifact_path=classifier_diagnostics["artifact_path"],
             classifier_model_type=classifier_diagnostics.get("model_type"),
+            classifier_artifact_load_attempted=bool(classifier_diagnostics.get("artifact_load_attempted", False)),
+            classifier_artifact_load_status=str(classifier_diagnostics.get("artifact_load_status", "not_attempted")),
+            classifier_artifact_rejection_reason=classifier_diagnostics.get("artifact_rejection_reason"),
             coverage_threshold=float(classifier_diagnostics["coverage_threshold"]),
         )
 

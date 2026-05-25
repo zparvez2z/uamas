@@ -195,8 +195,8 @@ If metrics show:
 
 ## Artifact Compatibility Check (90 seconds)
 1. Confirm artifact contract fields are present:
-   `curl -s http://127.0.0.1:8000/diagnostics | python -m json.tool | rg "classifier_artifact_format_version|classifier_dataset_fingerprint|classifier_runtime"`
-2. Expect `classifier_runtime` to be `ARTIFACT` or `TRAINED` and `classifier_artifact_format_version` to be non-null when artifact metadata is loaded.
-3. If a stale artifact is detected, diagnostics should show `classifier_runtime: "TRAINED"` with a metadata mismatch reason; this confirms strict validation rejected the artifact and retrained.
+   `curl -s http://127.0.0.1:8000/diagnostics | python -m json.tool | rg "classifier_artifact_format_version|classifier_dataset_fingerprint|classifier_runtime|classifier_artifact_load_status|classifier_artifact_rejection_reason"`
+2. Expect `classifier_runtime` to be `ARTIFACT` or `TRAINED`, `classifier_artifact_load_status` to be `loaded` or `rejected`, and `classifier_artifact_format_version` to be non-null when artifact metadata is loaded.
+3. If a stale artifact is detected, diagnostics should show `classifier_artifact_load_status: "rejected"` and a non-empty `classifier_artifact_rejection_reason`; this confirms strict validation rejected the artifact and retrained.
 4. Emergency fallback (temporary only):
    `STRICT_ARTIFACT_METADATA=false USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload`

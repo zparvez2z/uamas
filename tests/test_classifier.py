@@ -118,6 +118,9 @@ def test_classifier_artifact_round_trip_preserves_predictions(tmp_path: Path) ->
     assert artifact_path.exists()
     assert loaded.is_ready
     assert loaded.runtime == "ARTIFACT"
+    assert loaded.artifact_load_attempted is True
+    assert loaded.artifact_load_status == "loaded"
+    assert loaded.artifact_rejection_reason is None
     assert loaded.coverage_threshold == pytest.approx(trained.coverage_threshold)
     assert loaded.predict(item).probabilities == pytest.approx(trained.predict(item).probabilities)
 
@@ -154,6 +157,8 @@ def test_pipeline_loads_classifier_artifact_with_opt_out(monkeypatch, tmp_path: 
     assert pipeline.classifier.is_ready
     assert pipeline.classifier.runtime == "ARTIFACT"
     assert pipeline.classifier.artifact_path == artifact_path
+    assert pipeline.classifier.artifact_load_attempted is True
+    assert pipeline.classifier.artifact_load_status == "loaded"
 
 
 def test_classifier_diagnostics_report_fallback_reason(tmp_path: Path) -> None:
@@ -207,6 +212,9 @@ def test_classifier_artifact_metadata_exposed_in_diagnostics(tmp_path: Path) -> 
     metadata = diagnostics["artifact_metadata"]
 
     assert diagnostics["runtime"] == "ARTIFACT"
+    assert diagnostics["artifact_load_attempted"] is True
+    assert diagnostics["artifact_load_status"] == "loaded"
+    assert diagnostics["artifact_rejection_reason"] is None
     assert isinstance(metadata, dict)
     assert metadata["train_row_count"] == 2
     assert metadata["calibration_row_count"] == 2
@@ -283,6 +291,10 @@ def test_classifier_strict_metadata_blocks_mismatched_artifact_by_default(tmp_pa
 
     assert loaded.runtime == "TRAINED"
     assert loaded.reason == "model_type=embedding"
+    assert loaded.artifact_load_attempted is True
+    assert loaded.artifact_load_status == "rejected"
+    assert loaded.artifact_rejection_reason is not None
+    assert "metadata" in loaded.artifact_rejection_reason
 
 
 def test_classifier_strict_metadata_can_be_disabled_for_artifact_compatibility(
@@ -326,6 +338,9 @@ def test_classifier_strict_metadata_can_be_disabled_for_artifact_compatibility(
     )
 
     assert loaded.runtime == "ARTIFACT"
+    assert loaded.artifact_load_attempted is True
+    assert loaded.artifact_load_status == "loaded"
+    assert loaded.artifact_rejection_reason is None
 
 
 def test_classifier_rejects_unsupported_artifact_version(tmp_path: Path) -> None:

@@ -165,6 +165,9 @@ def run_evaluation(
         "classifier_reason": pipeline.classifier.reason,
         "classifier_runtime": classifier_diagnostics["runtime"],
         "classifier_model_type": classifier_model_type,
+        "classifier_artifact_load_attempted": classifier_diagnostics.get("artifact_load_attempted", False),
+        "classifier_artifact_load_status": classifier_diagnostics.get("artifact_load_status", "not_attempted"),
+        "classifier_artifact_rejection_reason": classifier_diagnostics.get("artifact_rejection_reason"),
         "classifier_artifact_path": display_path(
             classifier_diagnostics["artifact_path"],
             deterministic=not include_runtime,
@@ -197,6 +200,11 @@ def save_results(aggregated: dict, output_path: str = "reports/results.md") -> N
         handle.write(f"**Generated:** {aggregated['timestamp']}\n\n")
         handle.write(f"**Classifier:** {aggregated['classifier_mode']}\n\n")
         handle.write(f"**Classifier Runtime:** {aggregated['classifier_runtime']}\n\n")
+        handle.write(f"**Artifact Load Status:** {aggregated.get('classifier_artifact_load_status')}\n\n")
+        if aggregated.get("classifier_artifact_rejection_reason"):
+            handle.write(
+                f"**Artifact Rejection Reason:** {aggregated.get('classifier_artifact_rejection_reason')}\n\n"
+            )
         handle.write(f"**LLM Runtime:** {aggregated['llm_runtime_mode']}\n\n")
 
         runtime_breakdown = aggregated.get("runtime_breakdown") or {}

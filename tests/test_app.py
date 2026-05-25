@@ -13,3 +13,6 @@ def test_diagnostics_include_classifier_runtime_metadata() -> None:
     assert "classifier_artifact_metadata" in diagnostics
     assert "classifier_artifact_format_version" in diagnostics
     assert "classifier_dataset_fingerprint" in diagnostics
+    assert "classifier_artifact_load_attempted" in diagnostics
+    assert "classifier_artifact_load_status" in diagnostics
+    assert "classifier_artifact_rejection_reason" in diagnostics

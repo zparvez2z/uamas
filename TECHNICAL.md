@@ -150,6 +150,9 @@ These fields make the behavior explainable during a review or demo and also supp
 - a masked token prefix,
 - the last runtime path used by the pipeline,
 - classifier runtime source (`ARTIFACT`, `TRAINED`, or `FALLBACK`),
+- whether artifact loading was attempted,
+- artifact load decision status (`loaded`, `rejected`, `missing`, or `disabled`),
+- artifact rejection reason when strict checks reject a candidate artifact,
 - classifier readiness and fallback reason,
 - classifier artifact path,
 - and the active calibrated coverage threshold.

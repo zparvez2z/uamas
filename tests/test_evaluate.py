@@ -17,6 +17,9 @@ class FakeClassifier:
             "artifact_path": None,
             "model_type": "embedding",
             "coverage_threshold": 0.7,
+            "artifact_load_attempted": True,
+            "artifact_load_status": "rejected",
+            "artifact_rejection_reason": "classifier artifact metadata train hash mismatch",
             "artifact_metadata": {
                 "artifact_format_version": 1,
                 "classifier_family": "logistic_regression_text",
@@ -114,6 +117,9 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     assert aggregated["classifier_mode"] == "embedding_logreg_calibrated"
     assert aggregated["classifier_runtime"] == "TRAINED"
     assert aggregated["classifier_model_type"] == "embedding"
+    assert aggregated["classifier_artifact_load_attempted"] is True
+    assert aggregated["classifier_artifact_load_status"] == "rejected"
+    assert aggregated["classifier_artifact_rejection_reason"] == "classifier artifact metadata train hash mismatch"
     assert aggregated["coverage_threshold"] == 0.7
     assert aggregated["classifier_artifact_format_version"] == 1
     assert aggregated["classifier_dataset_fingerprint"] == "fphash"
@@ -157,6 +163,8 @@ def test_save_results_is_stable_without_runtime(monkeypatch, tmp_path) -> None:
     assert "## LLM Runtime Breakdown" not in report
     assert "Runtime (ms)" not in report
     assert "avg_runtime_ms" not in report
+    assert "**Artifact Load Status:** rejected" in report
+    assert "**Artifact Rejection Reason:** classifier artifact metadata train hash mismatch" in report
     assert "- Artifact Format Version: 1" in report
     assert "- Dataset Fingerprint SHA-256: fphash" in report
 

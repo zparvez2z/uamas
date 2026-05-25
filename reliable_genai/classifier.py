@@ -51,9 +51,22 @@ class CalibratedTextClassifier:
         self.strict_artifact_metadata = os.getenv("STRICT_ARTIFACT_METADATA", "true").lower() == "true"
         self.model_type = os.getenv("CLASSIFIER_MODEL_TYPE", "embedding").lower()
         self.sklearn_version: str | None = None
+        self.artifact_load_attempted = False
+        self.artifact_load_status = "not_attempted"
+        self.artifact_rejection_reason: str | None = None
 
-        if prefer_artifact and self.artifact_path and self.artifact_path.exists() and self._load_artifact():
-            return
+        if prefer_artifact:
+            if self.artifact_path and self.artifact_path.exists():
+                self.artifact_load_attempted = True
+                if self._load_artifact():
+                    self.artifact_load_status = "loaded"
+                    return
+                self.artifact_load_status = "rejected"
+                self.artifact_rejection_reason = self.reason
+            else:
+                self.artifact_load_status = "missing"
+        else:
+            self.artifact_load_status = "disabled"
 
         self._fit()
 
@@ -137,6 +150,7 @@ class CalibratedTextClassifier:
 
     def _load_artifact(self) -> bool:
         if self.artifact_path is None:
+            self.reason = "classifier artifact path is not configured"
             return False
 
         try:
@@ -172,6 +186,7 @@ class CalibratedTextClassifier:
         self.is_ready = True
         self.runtime = "ARTIFACT"
         self.reason = None
+        self.artifact_rejection_reason = None
         return True
 
     def _save_artifact(self) -> None:
@@ -303,6 +318,9 @@ class CalibratedTextClassifier:
             "artifact_path": str(self.artifact_path) if self.artifact_path else None,
             "coverage_threshold": self.coverage_threshold,
             "artifact_metadata": self.artifact_metadata,
+            "artifact_load_attempted": self.artifact_load_attempted,
+            "artifact_load_status": self.artifact_load_status,
+            "artifact_rejection_reason": self.artifact_rejection_reason,
         }
 
     @staticmethod
