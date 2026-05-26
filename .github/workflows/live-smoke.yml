@@ -20,7 +20,7 @@ jobs:
       ENABLE_LANGGRAPH_REVIEW: ${{ inputs.enable_langgraph_review }}
       GITHUB_MODELS_ENDPOINT: "https://models.github.ai/inference"
       GITHUB_MODELS_MODEL: "openai/gpt-4.1"
-      GITHUB_TOKEN: ${{ secrets.GITHUB_MODELS_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.MODELS_API_KEY }}
 
     steps:
       - name: Check out repository
@@ -34,7 +34,7 @@ jobs:
 
       - name: Validate required live secret
         run: |
-          test -n "${GITHUB_TOKEN}" || (echo "Missing required secret: GITHUB_MODELS_API_KEY" && exit 1)
+          test -n "${GITHUB_TOKEN}" || (echo "Missing required secret: MODELS_API_KEY" && exit 1)
 
       - name: Install dependencies
         run: python -m pip install -r requirements.txt

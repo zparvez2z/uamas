@@ -106,7 +106,7 @@ Host-side live verification helper:
 ## GitHub Actions live smoke workflow
 - Workflow: `.github/workflows/live-smoke.yml`
 - Trigger: manual (`workflow_dispatch`) from the Actions tab.
-- Required repository secret: `GITHUB_MODELS_API_KEY` (a token with GitHub Models access).
+- Required repository secret: `MODELS_API_KEY` (a token with GitHub Models access).
 - Runtime defaults in workflow:
   - `USE_MOCK_LLM=false`
   - `GITHUB_MODELS_ENDPOINT=https://models.github.ai/inference`
