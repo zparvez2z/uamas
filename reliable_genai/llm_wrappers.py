@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from typing import Any, Dict, Optional
 
 from azure.ai.inference import ChatCompletionsClient
@@ -20,6 +21,7 @@ class GitHubModelsClient:
         self.max_retries = int(os.getenv("LLM_MAX_RETRIES", "2"))
         self.use_mock = os.getenv("USE_MOCK_LLM", "true").lower() == "true"
         self.last_runtime = "MOCK" if self.use_mock else "LIVE"
+        self.last_error: Optional[str] = None
 
         self._client: Optional[ChatCompletionsClient] = None
         if self.api_key:
@@ -31,6 +33,7 @@ class GitHubModelsClient:
     def extract_attributes(self, title: str, description: str) -> ProductAttributes:
         if self.use_mock or not self._client:
             self.last_runtime = "MOCK"
+            self.last_error = None if self.use_mock else "live_client_unavailable"
             return self._mock_extract(title, description)
 
         system_prompt = (
@@ -40,6 +43,7 @@ class GitHubModelsClient:
         )
         user_prompt = f"Title: {title}\nDescription: {description}"
 
+        last_exception: Exception | None = None
         for _ in range(self.max_retries + 1):
             try:
                 completion = self._client.complete(
@@ -54,11 +58,18 @@ class GitHubModelsClient:
                 parsed = self._parse_json(payload)
                 extraction = LLMExtraction.model_validate(parsed)
                 self.last_runtime = "LIVE"
+                self.last_error = None
                 return extraction.attributes
-            except Exception:
+            except Exception as exc:
+                last_exception = exc
                 continue
 
         self.last_runtime = "FALLBACK_MOCK"
+        if last_exception is None:
+            self.last_error = "unknown_live_failure"
+        else:
+            self.last_error = f"{type(last_exception).__name__}: {last_exception}"
+            print(f"[WARN] LLM live call failed, using fallback: {self.last_error}", file=sys.stderr)
         return self._mock_extract(title, description)
 
     @staticmethod

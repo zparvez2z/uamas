@@ -34,6 +34,7 @@ def build_diagnostics() -> dict:
         "token_present": bool(token),
         "token_prefix": token[:8] + "..." if token else None,
         "last_runtime": pipeline.llm.last_runtime,
+        "llm_last_error": pipeline.llm.last_error,
         "classifier_runtime": classifier_diagnostics["runtime"],
         "classifier_ready": classifier_diagnostics["ready"],
         "classifier_reason": classifier_diagnostics["reason"],

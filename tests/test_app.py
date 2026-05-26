@@ -13,6 +13,7 @@ def _write_rows(path: Path, rows: list[dict[str, str]]) -> None:
 def test_diagnostics_include_classifier_runtime_metadata() -> None:
     diagnostics = app_main.build_diagnostics()
 
+    assert "llm_last_error" in diagnostics
     assert diagnostics["classifier_runtime"] in {"ARTIFACT", "TRAINED", "FALLBACK"}
     assert "classifier_ready" in diagnostics
     assert "classifier_reason" in diagnostics
@@ -94,6 +95,7 @@ def test_diagnostics_report_auto_rebuild_for_mismatched_artifact(monkeypatch, tm
                     "model": "mock-model",
                     "endpoint": "mock-endpoint",
                     "last_runtime": "MOCK",
+                    "last_error": None,
                 },
             )(),
             "max_set_size": 3,
