@@ -1,202 +1,114 @@
-# UAMAS Demo Walkthrough
+# UAMAS Demo Runbook
 
-This document provides concrete test cases and expected behaviors for a live demo.
+This is the exact operator runbook for demo execution.
 
-## Quick Demo (3 minutes)
-
-### Setup
-```bash
-# Terminal 1: Start the web server
-cd /home/pz/projects/uamas
-.venv/bin/python -m uvicorn app.main:app --reload
-
-# Terminal 2: Open browser
-# Navigate to http://localhost:8000
-```
-
----
-
-## Test Case 1: High-Confidence Product (Electronics)
-
-**Scenario:** Clear, unambiguous product
-
-**Input:**
-- Title: `Samsung 65-inch 4K Smart TV`
-- Description: `Ultra HD television with HDR10+ support, 120Hz refresh rate, smart apps`
-
-**Expected Output:**
-- Runtime: **LIVE** (green badge)
-- Category Set: `["electronics"]` or `["electronics", "home appliances"]` (small set)
-- Attributes: 
-  - Brand: `Samsung`
-  - Color: `Black` (inferred)
-  - Material: `Metal and plastic`
-  - Size: `65 inch`
-- Confidence: High (set size ≤ 2)
-- No abstention
-
-**Why this works:** Electronics terminology is clear and unambiguous.
-
----
-
-## Test Case 2: Moderate-Confidence Product (Hybrid Kitchen Appliance)
-
-**Scenario:** Product that fits multiple categories
-
-**Input:**
-- Title: `Multi-function Instant Pot Duo`
-- Description: `Electric pressure cooker that also functions as slow cooker, rice cooker, steamer`
-
-**Expected Output:**
-- Runtime: **LIVE**
-- Category Set: `["kitchen appliances", "cookware", "small appliances"]` (medium set, 2-3 items)
-- Attributes:
-  - Brand: `Instant Pot`
-  - Material: `Stainless steel`
-  - Size: `6-quart` (inferred from model)
-- Confidence: Moderate (set size 2-3)
-- No abstention
-
-**Why this works:** Multi-function products naturally have larger confidence sets due to ambiguity.
-
----
-
-## Test Case 3: Low-Confidence / Abstention Case
-
-**Scenario:** Vague product that triggers abstention policy
-
-**Input:**
-- Title: `Thing`
-- Description: `A product`
-
-**Expected Output:**
-- Runtime: **LIVE**
-- Category Set: `[]` (empty)
-- Attributes: All `"unknown"`
-- Confidence: 
-  - `abstained: true`
-  - `policy_action: "abstain"`
-  - `reason: "Insufficient product information or confidence set exceeds threshold"`
-- No attributes extracted
-
-**Why this works:** Insufficient product description triggers the abstention policy (empty set rejected as unreliable).
-
----
-
-## Test Case 4: Check Runtime Diagnostics
-
-**Scenario:** Verify API connectivity and mock fallback
-
-**In Browser Console (F12):**
-```javascript
-// Check current runtime status
-fetch('http://localhost:8000/diagnostics').then(r => r.json()).then(d => console.log(d))
-```
-
-**Expected Output:**
-```json
-{
-  "mode": "LIVE",
-  "last_runtime": "LIVE",
-  "token_present": true,
-  "endpoint": "https://models.github.ai/inference"
-}
-```
-
-**If GitHub Models is down or token invalid, you should see:**
-```json
-{
-  "mode": "LIVE",
-  "last_runtime": "FALLBACK_MOCK",
-  "token_present": true,
-  "endpoint": "https://models.github.ai/inference"
-}
-```
-
----
-
-## Running Full Evaluation
-
-To generate a full report with 8 diverse test products:
-
+## 1) One-time Setup
 ```bash
 cd /home/pz/projects/uamas
-.venv/bin/python scripts/evaluate.py
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
 ```
 
-This generates `reports/results.md` with:
-- Summary metrics (avg set size, abstention rate, runtime)
-- Per-product breakdown
-- Full JSON results for analysis
+## 2) Pre-Demo Health Check (Deterministic)
+Run from project root:
+```bash
+source .venv/bin/activate
+env -u ALPHA -u CLASSIFIER_MODEL_TYPE -u STRICT_ARTIFACT_METADATA -u CLASSIFIER_ARTIFACT_MISMATCH_POLICY \
+  RUNTIME_PROFILE_PATH=config/runtime_profile.json \
+  .venv/bin/python scripts/train_classifier.py --force
 
----
+env -u ALPHA -u CLASSIFIER_MODEL_TYPE -u STRICT_ARTIFACT_METADATA -u CLASSIFIER_ARTIFACT_MISMATCH_POLICY \
+  RUNTIME_PROFILE_PATH=config/runtime_profile.json \
+  .venv/bin/python scripts/evaluate.py --mock --with-review-acceptance-check --output /tmp/uamas-pre-demo-results.md
+```
 
-## Demo Talking Points
+Expected signal:
+- Evaluation completes without errors.
+- Output file exists: `/tmp/uamas-pre-demo-results.md`.
 
-### Point 1: Uncertainty Quantification
-*"Most ML systems output a single prediction. We output a **confidence set** — a set of plausible categories rather than guessing one. If we're confident, the set is small (1-2 items). If we're uncertain, the set is larger."*
+## 3) Mock Demo Path (Safe Fallback)
+Terminal 1:
+```bash
+cd /home/pz/projects/uamas
+source .venv/bin/activate
+USE_MOCK_LLM=true .venv/bin/python -m uvicorn app.main:app --reload
+```
 
-**Demo:** Contrast Test Case 1 (small set) with Test Case 2 (larger set).
+Open:
+- http://127.0.0.1:8000
+- http://127.0.0.1:8000/diagnostics
 
-### Point 2: Reliability Policy
-*"We have a **policy layer** that refuses to predict if uncertainty is too high (empty set or set exceeds threshold). This prevents overconfident wrong predictions."*
+Expected diagnostics:
+- `runtime_mode: "MOCK"`
+- `classifier_runtime: "ARTIFACT"`
 
-**Demo:** Show Test Case 3 abstaining and explain why.
+## 4) Live Demo Path (Primary)
+Make sure `.env` has valid:
+- `GITHUB_TOKEN`
+- `GITHUB_MODELS_ENDPOINT`
+- `GITHUB_MODELS_MODEL`
 
-### Point 3: Live LLM Integration
-*"The pipeline uses **GitHub Models (GPT-4.1)** via live API to extract structured attributes (brand, color, material, size). The runtime badge shows whether we're using the live API or fallback mock mode."*
+Terminal 1:
+```bash
+cd /home/pz/projects/uamas
+source .venv/bin/activate
+USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload
+```
 
-**Demo:** Point to green LIVE badge; run diagnostics endpoint to show token is present.
+Terminal 2 (strict host-side verification):
+```bash
+cd /home/pz/projects/uamas
+source .venv/bin/activate
+./host_side_verfication_pass.sh
+```
 
-### Point 4: Production-Ready Reliability
-*"Every prediction includes **reliability metadata**: confidence level, coverage target (alpha), whether we abstained, and why. This gives stakeholders full transparency."*
+Expected success signal:
+- Every `PREDICT_*` block shows:
+  - `"llm_runtime": "LIVE"`
+  - `"diag_last_runtime": "LIVE"`
+  - `"diag_llm_last_error": None`
 
-**Demo:** Inspect the "Reliability Metadata" section in the UI response.
+## 5) Demo Inputs to Use in UI
+### Input A (clear case)
+- Title: `Nike running shoes black size 42`
+- Description: `Breathable mesh upper and cushioned sole`
 
----
+Expected behavior:
+- category set is small and shoe-related,
+- abstention is usually false.
 
-## Troubleshooting
+### Input B (ambiguous case)
+- Title: `Spa Gift Set`
+- Description: `Body lotion, scented candle, decorative storage box`
 
-### "MOCK" or "FALLBACK_MOCK" badge appears
-- **Cause:** GitHub token is missing or invalid
-- **Fix:** Check `.env` file has `GITHUB_TOKEN` with valid personal access token
+Expected behavior:
+- larger uncertainty or abstention may appear,
+- reliability metadata clearly explains outcome.
 
-### Empty response / error
-- **Cause:** `.venv` not activated or dependencies not installed
-- **Fix:** Run `pip install -r requirements.txt` in activated `.venv`
+## 6) What to Show in 3-5 Minutes
+1. `/diagnostics` page: runtime mode, classifier runtime, review graph status.
+2. Run Input A: show category set + attributes + reliability metadata.
+3. Run Input B: show uncertainty handling (set size/abstain behavior).
+4. Mention that live failures degrade gracefully to fallback mock with `llm_last_error`.
+5. Point to `reports/results.md` for deterministic evidence and acceptance metrics.
 
-### Slow responses (>5s)
-- **Cause:** LLM API latency (normal for first call)
-- **Fix:** Subsequent calls within same session use cache; this is expected
+## 7) Fast Troubleshooting
+### If live requests return `FALLBACK_MOCK`
+- Check `GET /diagnostics` -> `llm_last_error`.
+- Verify `.env` token and endpoint.
+- Re-run `./host_side_verfication_pass.sh`.
 
----
+### If classifier is not `ARTIFACT`
+```bash
+source .venv/bin/activate
+env -u ALPHA -u CLASSIFIER_MODEL_TYPE -u STRICT_ARTIFACT_METADATA -u CLASSIFIER_ARTIFACT_MISMATCH_POLICY \
+  RUNTIME_PROFILE_PATH=config/runtime_profile.json \
+  .venv/bin/python scripts/train_classifier.py --force
+```
 
-## Expected Metrics (from evaluate.py)
-
-After running `scripts/evaluate.py`, you should see approximately:
-- **Avg Set Size:** 1.5 - 2.5 (tight confidence sets for clear products)
-- **Abstention Rate:** 10-20% (only truly vague products)
-- **Avg Runtime:** 2-4 seconds (includes LLM latency)
-
-If metrics show:
-- **Set size >> 3:** Classifier may need tuning
-- **Abstention rate > 50%:** Alpha (confidence threshold) may be too strict
-- **Runtime >> 5s:** LLM API degradation or network latency
-
-
-## Pre-demo Runtime Trust Check (60 seconds)
-1. Start server in live mode:
-   `USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload`
-2. Confirm diagnostics:
-   `curl -s http://127.0.0.1:8000/diagnostics | python -m json.tool`
-3. Run a clear example and verify `reliability.llm_runtime` plus diagnostics `last_runtime`.
-4. Run an ambiguous example and confirm policy metadata (`set_size`, `abstained`, `reason`).
-5. If fallback occurs, call it out explicitly during the demo as graceful degradation.
-
-## Artifact Compatibility Check (90 seconds)
-1. Confirm artifact contract fields are present:
-   `curl -s http://127.0.0.1:8000/diagnostics | python -m json.tool | rg "classifier_artifact_format_version|classifier_dataset_fingerprint|classifier_runtime|classifier_artifact_load_status|classifier_artifact_rejection_reason"`
-2. Expect `classifier_runtime` to be `ARTIFACT` or `TRAINED`, `classifier_artifact_load_status` to be `loaded` or `rejected`, and `classifier_artifact_format_version` to be non-null when artifact metadata is loaded.
-3. If a stale artifact is detected, diagnostics should show `classifier_artifact_load_status: "rejected"` and a non-empty `classifier_artifact_rejection_reason`; this confirms strict validation rejected the artifact and retrained.
-4. Emergency fallback (temporary only):
-   `STRICT_ARTIFACT_METADATA=false USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload`
+### If port 8000 is busy
+```bash
+USE_MOCK_LLM=true .venv/bin/python -m uvicorn app.main:app --reload --port 8001
+```
