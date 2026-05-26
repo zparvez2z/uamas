@@ -102,6 +102,25 @@ Example:
 Host-side live verification helper:
 - Run `./host_side_verfication_pass.sh`
 - Expected success signal: each `PREDICT_*` entry shows `llm_runtime: LIVE` and `diag_llm_last_error: None`.
+
+## GitHub Actions live smoke workflow
+- Workflow: `.github/workflows/live-smoke.yml`
+- Trigger: manual (`workflow_dispatch`) from the Actions tab.
+- Required repository secret: `GITHUB_MODELS_API_KEY` (a token with GitHub Models access).
+- Runtime defaults in workflow:
+  - `USE_MOCK_LLM=false`
+  - `GITHUB_MODELS_ENDPOINT=https://models.github.ai/inference`
+  - `GITHUB_MODELS_MODEL=openai/gpt-4.1`
+- What it validates:
+  - live token is present,
+  - classifier artifact can be rebuilt,
+  - three sample predictions complete with `llm_runtime=LIVE`,
+  - diagnostics keep `last_runtime=LIVE` and `llm_last_error=None`.
+
+You can run the same check locally:
+```bash
+USE_MOCK_LLM=false .venv/bin/python scripts/live_smoke.py
+```
 ## Merge safety checklist
 - Keep each PR single-purpose (for example: evaluation logic, tests, or docs), instead of mixing concerns.
 - Rebase your branch on `main` before opening a PR and again before merge.
