@@ -48,3 +48,11 @@ jobs:
         env:
           USE_MOCK_LLM: "true"
         run: python scripts/evaluate.py
+
+      - name: Run mock evaluation with acceptance check
+        env:
+          USE_MOCK_LLM: "true"
+        run: python scripts/evaluate.py --mock --with-review-acceptance-check --output /tmp/results-with-acceptance.md
+
+      - name: Verify acceptance section present
+        run: grep -q "Review Trigger Reduction Acceptance Check" /tmp/results-with-acceptance.md
