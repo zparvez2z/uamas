@@ -30,12 +30,14 @@ The attribute extraction path uses GitHub Models via Azure AI Inference and vali
 ```mermaid
 flowchart LR
   U[Browser Client] --> UI[FastAPI Web UI\napp/main.py + templates]
-  UI --> P[ReliabilityPipeline\nreliable_genai/pipeline.py]
+  UI --> RG[ReviewGraphRunner\nreliable_genai/review_graph.py]
+  RG --> P[ReliabilityPipeline\nreliable_genai/pipeline.py]
   UI --> D[Diagnostics Endpoint\nGET /diagnostics]
 
-  P --> C[TF-IDF Classifier\nkeyword fallback]
+  P --> C[Embedding-first Classifier\nHashing+SVD+LogReg]
   P --> S[Calibrated Set Builder\nalpha / max set size]
   P --> L[GitHub Models Client\nazure-ai-inference]
+  C -. optional .-> C2[TF-IDF classifier mode]
 
   C --> M[Category Set]
   S --> R[Reliability Metadata]
@@ -50,8 +52,11 @@ flowchart LR
     E2[GITHUB_TOKEN]
     E3[USE_MOCK_LLM]
     E4[ALPHA]
+    E5[runtime_profile.json]
+    E6[ENABLE_LANGGRAPH_REVIEW]
   end
 
+  Config --> RG
   Config --> P
   Config --> L
   Config --> UI
@@ -59,8 +64,10 @@ flowchart LR
 
 ### Runtime components
 - `app/main.py` provides the web UI and endpoints.
+- `reliable_genai/review_graph.py` optionally orchestrates second-pass review through LangGraph when enabled.
 - `reliable_genai/pipeline.py` implements the classification, set construction, and response assembly logic.
 - `reliable_genai/llm_wrappers.py` handles GitHub Models access, mock mode, and fallback extraction.
+- `reliable_genai/runtime_profile.py` resolves classifier-critical runtime defaults and precedence.
 - `reliable_genai/models.py` defines the Pydantic request and response models.
 
 ## 4) Request Flow
@@ -264,3 +271,44 @@ Possible next steps if the project is extended:
 - version and compare trained model artifacts across classifier families with explicit metadata,
 - add a small evaluation notebook or report,
 - and add a results dashboard for coverage and abstention metrics.
+
+## 13) Pre-demo Live Validation Checklist
+1. Export or set live environment variables (`GITHUB_MODELS_ENDPOINT`, `GITHUB_TOKEN`, `GITHUB_MODELS_MODEL`).
+2. Start app in live mode:
+   `USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload`
+3. Check diagnostics:
+   `curl -s http://127.0.0.1:8000/diagnostics | python -m json.tool`
+4. Run at least one clear and one ambiguous prediction.
+5. Confirm response `reliability.llm_runtime` and diagnostics `last_runtime` match expected live behavior.
+6. If fallback appears, capture `llm_last_error` in demo notes.
+
+Host-side helper:
+- `./host_side_verfication_pass.sh`
+- Expected pass signal: each `PREDICT_*` line reports `llm_runtime: LIVE` and `diag_llm_last_error: None`.
+
+## 14) GitHub Actions Live Smoke Workflow
+Workflow file:
+- `.github/workflows/live-smoke.yml`
+
+Trigger:
+- Manual `workflow_dispatch` from Actions tab.
+
+Required repository secret:
+- `MODELS_API_KEY`
+
+What it verifies:
+- live token is present in workflow runtime,
+- classifier artifact can be rebuilt,
+- three sample predictions complete with `llm_runtime=LIVE`,
+- diagnostics remain `last_runtime=LIVE` and `llm_last_error=None`.
+
+Local equivalent:
+- `USE_MOCK_LLM=false .venv/bin/python scripts/live_smoke.py`
+
+## 15) Merge Safety Checklist
+- Keep each PR single-purpose (tests, docs, workflow, evaluation) instead of mixing concerns.
+- Rebase on `main` before opening and before merging.
+- Prefer append-only edits in large test files to reduce hunk conflicts.
+- Use feature-scoped test names to avoid accidental duplicates.
+- Avoid committing generated report artifacts unless explicitly required for evidence.
+- For stacked work, split follow-up changes into small PRs with narrow file scope.
