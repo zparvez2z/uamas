@@ -12,9 +12,9 @@
 
 **LLM Runtime:** MOCK
 
-## Review Trigger Reduction Acceptance Check (2026-05-25)
+## Review Trigger Reduction Acceptance Check (2026-05-26)
 
-- Runtime mode: `USE_MOCK_LLM=true`, `ENABLE_LANGGRAPH_REVIEW=true`
+- Runtime mode: `USE_MOCK_LLM=true, ENABLE_LANGGRAPH_REVIEW=true`
 - Baseline config: `REVIEW_GATE_STRATEGY=legacy`, `REVIEW_SET_SIZE_TRIGGER=3`
 - Tuned config: `REVIEW_GATE_STRATEGY=latency_v1`, `REVIEW_SET_SIZE_TRIGGER=4`, `REVIEW_VERY_LOW_CONFIDENCE_FLOOR=0.35`
 - Baseline trigger rate: **0.581**
@@ -44,7 +44,7 @@
 - Artifact Format Version: 1
 - Classifier Family: logistic_regression_text
 - Model Type: embedding
-- Created At (UTC): 2026-05-25T20:19:50.244650+00:00
+- Created At (UTC): 2026-05-26T05:53:21.273191+00:00
 - Python Version: 3.11.13
 - scikit-learn Version: 1.8.0
 - Train Rows: 125
@@ -133,7 +133,7 @@
   "classifier_artifact_metadata": {
     "artifact_format_version": 1,
     "classifier_family": "logistic_regression_text",
-    "created_at_utc": "2026-05-25T20:19:50.244650+00:00",
+    "created_at_utc": "2026-05-26T05:53:21.273191+00:00",
     "python_version": "3.11.13",
     "sklearn_version": "1.8.0",
     "train_path": "/home/pz/projects/uamas/data/processed/train.json",
@@ -1590,6 +1590,28 @@
     "fallback_mock_count": 0,
     "fallback_rate": 0.0
   },
-  "include_runtime": false
+  "include_runtime": false,
+  "review_trigger_acceptance_check": {
+    "date": "2026-05-26",
+    "runtime_mode": "USE_MOCK_LLM=true, ENABLE_LANGGRAPH_REVIEW=true",
+    "baseline_config": {
+      "review_gate_strategy": "legacy",
+      "review_set_size_trigger": 3
+    },
+    "tuned_config": {
+      "review_gate_strategy": "latency_v1",
+      "review_set_size_trigger": 4,
+      "review_very_low_confidence_floor": 0.35
+    },
+    "baseline_trigger_rate": 0.581,
+    "tuned_trigger_rate": 0.097,
+    "trigger_rate_target": 0.25,
+    "baseline_second_pass_rate": 0.581,
+    "tuned_second_pass_rate": 0.097,
+    "baseline_empirical_coverage": 0.903,
+    "tuned_empirical_coverage": 0.903,
+    "coverage_delta": 0.0,
+    "coverage_delta_floor": -0.01
+  }
 }
 ```
