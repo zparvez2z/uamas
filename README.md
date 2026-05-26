@@ -23,6 +23,7 @@ USE_MOCK_LLM=true .venv/bin/python -m uvicorn app.main:app --reload
 ```
 
 Open: http://127.0.0.1:8000
+Dashboard: http://127.0.0.1:8000/dashboard
 
 ## Switch to live mode
 Set your GitHub Models credentials in `.env`, then run:

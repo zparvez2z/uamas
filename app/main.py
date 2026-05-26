@@ -1,9 +1,11 @@
 import json
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -19,11 +21,25 @@ templates = Jinja2Templates(directory="app/templates")
 
 pipeline = ReliabilityPipeline()
 review_graph = ReviewGraphRunner(pipeline)
+RESULTS_JSON_PATH = Path("reports/results.json")
+RESULTS_MD_PATH = Path("reports/results.md")
 
 
 def build_diagnostics() -> dict:
     token = os.getenv("GITHUB_TOKEN", "")
     classifier_diagnostics = pipeline.classifier.diagnostics()
+    semantic_scorer = getattr(pipeline, "semantic_scorer", None)
+    if semantic_scorer is not None and hasattr(semantic_scorer, "diagnostics"):
+        semantic_diagnostics = semantic_scorer.diagnostics()
+    else:
+        semantic_diagnostics = {
+            "enabled": False,
+            "client_available": False,
+            "threshold": None,
+            "model": None,
+            "degraded_rate": 0.0,
+            "degraded_requests": 0,
+        }
     review_diagnostics = review_graph.diagnostics()
     artifact_metadata = classifier_diagnostics.get("artifact_metadata", {}) or {}
     return {
@@ -56,13 +72,31 @@ def build_diagnostics() -> dict:
         "review_graph_reason": review_diagnostics.get("reason"),
         "review_graph_confidence_threshold": review_diagnostics.get("confidence_threshold"),
         "review_graph_set_size_trigger": review_diagnostics.get("set_size_trigger"),
+        "review_graph_semantic_threshold": review_diagnostics.get("semantic_threshold"),
         "review_graph_gate_strategy": review_diagnostics.get("gate_strategy"),
         "review_graph_very_low_confidence_floor": review_diagnostics.get("very_low_confidence_floor"),
         "review_graph_trigger_rate": review_diagnostics.get("review_graph_trigger_rate"),
         "review_graph_second_pass_rate": review_diagnostics.get("review_graph_second_pass_rate"),
+        "review_graph_semantic_trigger_rate": review_diagnostics.get("review_graph_semantic_trigger_rate"),
         "review_graph_cache_hit_rate": review_diagnostics.get("review_graph_cache_hit_rate"),
         "review_graph_cached_step_count": review_diagnostics.get("review_graph_cached_step_count"),
+        "semantic_scorer_enabled": semantic_diagnostics.get("enabled"),
+        "semantic_scorer_client_available": semantic_diagnostics.get("client_available"),
+        "semantic_scorer_threshold": semantic_diagnostics.get("threshold"),
+        "semantic_scorer_model": semantic_diagnostics.get("model"),
+        "semantic_scorer_degraded_rate": semantic_diagnostics.get("degraded_rate"),
+        "semantic_scorer_degraded_requests": semantic_diagnostics.get("degraded_requests"),
     }
+
+
+def load_results_artifact(path: Path = RESULTS_JSON_PATH) -> tuple[dict | None, str | None]:
+    if not path.exists():
+        return None, f"{path} not found"
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle), None
+    except Exception as exc:
+        return None, f"failed to parse {path}: {exc}"
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -130,3 +164,32 @@ def health() -> dict:
 @app.get("/diagnostics")
 def diagnostics() -> dict:
     return build_diagnostics()
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request) -> HTMLResponse:
+    diagnostics_payload = build_diagnostics()
+    artifact, artifact_error = load_results_artifact()
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        {
+            "diagnostics": diagnostics_payload,
+            "artifact": artifact,
+            "artifact_error": artifact_error,
+        },
+    )
+
+
+@app.get("/artifacts/results.json")
+def artifact_results_json() -> FileResponse:
+    if not RESULTS_JSON_PATH.exists():
+        raise HTTPException(status_code=404, detail=f"{RESULTS_JSON_PATH} not found")
+    return FileResponse(RESULTS_JSON_PATH, media_type="application/json", filename="results.json")
+
+
+@app.get("/artifacts/results.md")
+def artifact_results_md() -> FileResponse:
+    if not RESULTS_MD_PATH.exists():
+        raise HTTPException(status_code=404, detail=f"{RESULTS_MD_PATH} not found")
+    return FileResponse(RESULTS_MD_PATH, media_type="text/markdown", filename="results.md")

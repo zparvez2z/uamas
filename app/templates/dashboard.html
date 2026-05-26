@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reliability Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="container dashboard-container">
+    <section class="card dashboard-span">
+      <div class="header-row">
+        <h1>Reliability Dashboard</h1>
+        <span class="runtime-badge runtime-{{ diagnostics.runtime_mode|lower }}">{{ diagnostics.runtime_mode }}</span>
+      </div>
+      <p class="subtitle">Live diagnostics and latest evaluation artifact summary.</p>
+      <div class="actions-row">
+        <a class="link-btn" href="/">Back to Demo</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Runtime Diagnostics</h2>
+      <div class="diagnostics-grid">
+        <div><span>LLM last runtime</span><strong>{{ diagnostics.last_runtime }}</strong></div>
+        <div><span>LLM last error</span><strong>{{ diagnostics.llm_last_error or "None" }}</strong></div>
+        <div><span>Classifier runtime</span><strong>{{ diagnostics.classifier_runtime }}</strong></div>
+        <div><span>Coverage threshold</span><strong>{{ "%.4f"|format(diagnostics.coverage_threshold) }}</strong></div>
+        <div><span>Review backend</span><strong>{{ diagnostics.review_graph_backend }}</strong></div>
+        <div><span>Review gate strategy</span><strong>{{ diagnostics.review_graph_gate_strategy }}</strong></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Semantic Scorer</h2>
+      <div class="diagnostics-grid">
+        <div><span>Enabled</span><strong>{{ "Yes" if diagnostics.semantic_scorer_enabled else "No" }}</strong></div>
+        <div><span>Client available</span><strong>{{ "Yes" if diagnostics.semantic_scorer_client_available else "No" }}</strong></div>
+        <div><span>Threshold</span><strong>{{ diagnostics.semantic_scorer_threshold }}</strong></div>
+        <div><span>Model</span><strong>{{ diagnostics.semantic_scorer_model }}</strong></div>
+        <div><span>Degraded requests</span><strong>{{ diagnostics.semantic_scorer_degraded_requests }}</strong></div>
+        <div><span>Degraded rate</span><strong>{{ diagnostics.semantic_scorer_degraded_rate }}</strong></div>
+      </div>
+    </section>
+
+    <section class="card dashboard-span">
+      <h2>Review Trigger Telemetry</h2>
+      <div class="diagnostics-grid">
+        <div><span>Trigger rate</span><strong>{{ diagnostics.review_graph_trigger_rate }}</strong></div>
+        <div><span>Second-pass rate</span><strong>{{ diagnostics.review_graph_second_pass_rate }}</strong></div>
+        <div><span>Semantic trigger rate</span><strong>{{ diagnostics.review_graph_semantic_trigger_rate }}</strong></div>
+        <div><span>Cache hit rate</span><strong>{{ diagnostics.review_graph_cache_hit_rate }}</strong></div>
+      </div>
+      {% if artifact and artifact.review_graph_trigger_reason_counts %}
+      <h3>Trigger Reason Distribution</h3>
+      <div class="diagnostics-grid">
+        {% for reason, count in artifact.review_graph_trigger_reason_counts.items() %}
+        <div><span>{{ reason }}</span><strong>{{ count }}</strong></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="card dashboard-span">
+      <h2>Latest Evaluation Artifact</h2>
+      {% if artifact_error %}
+      <div class="error">{{ artifact_error }}</div>
+      {% else %}
+      <div class="diagnostics-grid">
+        <div><span>Generated</span><strong>{{ artifact.timestamp }}</strong></div>
+        <div><span>Products tested</span><strong>{{ artifact.total_products }}</strong></div>
+        <div><span>Classifier runtime</span><strong>{{ artifact.classifier_runtime }}</strong></div>
+        <div><span>LLM runtime mode</span><strong>{{ artifact.llm_runtime_mode }}</strong></div>
+        <div><span>Empirical coverage</span><strong>{{ artifact.metrics.empirical_coverage }}</strong></div>
+        <div><span>Abstention rate</span><strong>{{ artifact.metrics.abstention_rate }}</strong></div>
+        <div><span>Semantic available rate</span><strong>{{ artifact.semantic_score_availability_rate or "n/a" }}</strong></div>
+        <div><span>Semantic degraded rate</span><strong>{{ artifact.semantic_degraded_rate or "n/a" }}</strong></div>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="card dashboard-span">
+      <h2>Evidence Links</h2>
+      <div class="actions-row">
+        <a class="link-btn" href="/diagnostics">Live Diagnostics JSON</a>
+        <a class="link-btn" href="/artifacts/results.md">Latest Results (Markdown)</a>
+        <a class="link-btn" href="/artifacts/results.json">Latest Results (JSON)</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

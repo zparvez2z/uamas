@@ -39,6 +39,7 @@ USE_MOCK_LLM=true .venv/bin/python -m uvicorn app.main:app --reload
 Open:
 - http://127.0.0.1:8000
 - http://127.0.0.1:8000/diagnostics
+- http://127.0.0.1:8000/dashboard
 
 Expected diagnostics:
 - `runtime_mode: "MOCK"`
@@ -89,10 +90,11 @@ Expected behavior:
 
 ## 6) What to Show in 3-5 Minutes
 1. `/diagnostics` page: runtime mode, classifier runtime, review graph status.
-2. Run Input A: show category set + attributes + reliability metadata.
-3. Run Input B: show uncertainty handling (set size/abstain behavior).
-4. Mention that live failures degrade gracefully to fallback mock with `llm_last_error`.
-5. Point to `reports/results.md` for deterministic evidence and acceptance metrics.
+2. `/dashboard` page: semantic scorer health + latest evaluation summary cards.
+3. Run Input A: show category set + attributes + reliability metadata.
+4. Run Input B: show uncertainty handling (set size/abstain behavior).
+5. Mention that live failures degrade gracefully to fallback mock with `llm_last_error`.
+6. Point to `reports/results.md` and `reports/results.json` for deterministic evidence.
 
 ## 7) Fast Troubleshooting
 ### If live requests return `FALLBACK_MOCK`

@@ -25,6 +25,7 @@ class ReviewGraphContext:
     enabled: bool = False
     confidence_threshold: float = 0.55
     set_size_trigger: int = 3
+    semantic_threshold: float = 0.4
     cache_ttl_seconds: int = 300
     gate_strategy: str = "legacy"
     very_low_confidence_floor: float = 0.35
@@ -62,6 +63,7 @@ def _second_pass_cache_key(*args: Any, **kwargs: Any) -> str:
         "description": getattr(item, "description", ""),
         "confidence_threshold": config.get("confidence_threshold"),
         "set_size_trigger": config.get("set_size_trigger"),
+        "semantic_threshold": config.get("semantic_threshold"),
         "gate_strategy": config.get("gate_strategy"),
         "very_low_confidence_floor": config.get("very_low_confidence_floor"),
     }
@@ -78,6 +80,7 @@ class ReviewGraphRunner:
         enabled: bool | None = None,
         confidence_threshold: float | None = None,
         set_size_trigger: int | None = None,
+        semantic_threshold: float | None = None,
         cache_ttl_seconds: int | None = None,
         gate_strategy: str | None = None,
         very_low_confidence_floor: float | None = None,
@@ -88,6 +91,7 @@ class ReviewGraphRunner:
             enabled=enabled,
             confidence_threshold=confidence_threshold,
             set_size_trigger=set_size_trigger,
+            semantic_threshold=semantic_threshold,
             cache_ttl_seconds=cache_ttl_seconds,
             gate_strategy=gate_strategy,
             very_low_confidence_floor=very_low_confidence_floor,
@@ -102,6 +106,7 @@ class ReviewGraphRunner:
             "enabled_requests": 0,
             "triggered_requests": 0,
             "second_pass_requests": 0,
+            "semantic_triggered_requests": 0,
             "cache_hit_steps": 0,
         }
 
@@ -122,6 +127,7 @@ class ReviewGraphRunner:
         enabled: bool | None,
         confidence_threshold: float | None,
         set_size_trigger: int | None,
+        semantic_threshold: float | None,
         cache_ttl_seconds: int | None,
         gate_strategy: str | None,
         very_low_confidence_floor: float | None,
@@ -141,6 +147,11 @@ class ReviewGraphRunner:
             if set_size_trigger is not None
             else int(os.getenv("REVIEW_SET_SIZE_TRIGGER", str(getattr(self.pipeline, "max_set_size", 3))))
         )
+        semantic_threshold_value = (
+            semantic_threshold
+            if semantic_threshold is not None
+            else float(os.getenv("SEMANTIC_CONSISTENCY_THRESHOLD", "0.4"))
+        )
         cache_ttl_value = (
             cache_ttl_seconds
             if cache_ttl_seconds is not None
@@ -158,6 +169,7 @@ class ReviewGraphRunner:
             enabled=enabled_value,
             confidence_threshold=confidence_value,
             set_size_trigger=set_size_value,
+            semantic_threshold=semantic_threshold_value,
             cache_ttl_seconds=max(1, cache_ttl_value),
             gate_strategy=gate_strategy_value,
             very_low_confidence_floor=very_low_confidence_floor_value,
@@ -173,6 +185,7 @@ class ReviewGraphRunner:
             "enabled",
             "confidence_threshold",
             "set_size_trigger",
+            "semantic_threshold",
             "cache_ttl_seconds",
             "gate_strategy",
             "very_low_confidence_floor",
@@ -228,6 +241,8 @@ class ReviewGraphRunner:
         return {"first_response": self.pipeline.predict(state["item"])}
 
     def _compute_trigger_reason(self, first: PredictionResponse, context: ReviewGraphContext) -> str | None:
+        semantic_score = first.reliability.semantic_consistency_score
+        semantic_ok = first.reliability.semantic_consistency_status == "ok" and semantic_score is not None
         if context.gate_strategy == "latency_v1":
             if first.reliability.abstained:
                 return "abstained"
@@ -238,6 +253,8 @@ class ReviewGraphRunner:
                 and first.reliability.set_size >= context.set_size_trigger
             ):
                 return "low_confidence_large_set"
+            if semantic_ok and float(semantic_score) < context.semantic_threshold:
+                return "low_semantic_consistency"
             return None
 
         if first.reliability.abstained:
@@ -246,6 +263,8 @@ class ReviewGraphRunner:
             return "low_confidence"
         if first.reliability.set_size >= context.set_size_trigger:
             return "large_set"
+        if semantic_ok and float(semantic_score) < context.semantic_threshold:
+            return "low_semantic_consistency"
         return None
 
     def _node_gate(self, state: ReviewGraphState, runtime: Runtime[ReviewGraphContext]) -> ReviewGraphState:
@@ -258,6 +277,7 @@ class ReviewGraphRunner:
             "cache_key_config": {
                 "confidence_threshold": runtime.context.confidence_threshold,
                 "set_size_trigger": runtime.context.set_size_trigger,
+                "semantic_threshold": runtime.context.semantic_threshold,
                 "gate_strategy": runtime.context.gate_strategy,
                 "very_low_confidence_floor": runtime.context.very_low_confidence_floor,
             },
@@ -377,6 +397,8 @@ class ReviewGraphRunner:
             if response.reliability.review_trigger_reason:
                 self._stats["triggered_requests"] += 1
                 self._stats["second_pass_requests"] += 1
+                if response.reliability.review_trigger_reason == "low_semantic_consistency":
+                    self._stats["semantic_triggered_requests"] += 1
             return response
 
         updates = list(graph.stream({"item": item}, context=cfg, stream_mode="updates"))
@@ -398,6 +420,8 @@ class ReviewGraphRunner:
 
         if final_response.reliability.review_trigger_reason:
             self._stats["triggered_requests"] += 1
+            if final_response.reliability.review_trigger_reason == "low_semantic_consistency":
+                self._stats["semantic_triggered_requests"] += 1
 
         return final_response
 
@@ -405,6 +429,7 @@ class ReviewGraphRunner:
         enabled_requests = self._stats["enabled_requests"]
         triggered = self._stats["triggered_requests"]
         second_pass = self._stats["second_pass_requests"]
+        semantic_triggered = self._stats["semantic_triggered_requests"]
         cache_hit_steps = self._stats["cache_hit_steps"]
         return {
             "enabled": self.default_context.enabled,
@@ -413,11 +438,15 @@ class ReviewGraphRunner:
             "reason": self.reason,
             "confidence_threshold": self.default_context.confidence_threshold,
             "set_size_trigger": self.default_context.set_size_trigger,
+            "semantic_threshold": self.default_context.semantic_threshold,
             "cache_ttl_seconds": self.default_context.cache_ttl_seconds,
             "gate_strategy": self.default_context.gate_strategy,
             "very_low_confidence_floor": self.default_context.very_low_confidence_floor,
             "review_graph_trigger_rate": round(triggered / enabled_requests, 3) if enabled_requests else 0.0,
             "review_graph_second_pass_rate": round(second_pass / enabled_requests, 3) if enabled_requests else 0.0,
+            "review_graph_semantic_trigger_rate": (
+                round(semantic_triggered / enabled_requests, 3) if enabled_requests else 0.0
+            ),
             "review_graph_cache_hit_rate": round(cache_hit_steps / second_pass, 3) if second_pass else 0.0,
             "review_graph_cached_step_count": cache_hit_steps,
         }

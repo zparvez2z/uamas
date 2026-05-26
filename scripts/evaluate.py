@@ -243,6 +243,7 @@ def run_evaluation(
         "low_confidence_large_set",
         "low_confidence",
         "large_set",
+        "low_semantic_consistency",
     )
     review_trigger_reason_counts = {
         reason: sum(1 for result in results if result["reliability"].get("review_trigger_reason") == reason)
@@ -254,6 +255,22 @@ def run_evaluation(
     }
     review_diagnostics = review_graph.diagnostics()
     artifact_metadata = classifier_diagnostics.get("artifact_metadata", {}) or {}
+    semantic_scored_count = sum(
+        1 for result in results if result["reliability"].get("semantic_consistency_score") is not None
+    )
+    semantic_degraded_count = sum(
+        1
+        for result in results
+        if result["reliability"].get("semantic_consistency_status") == "degraded"
+    )
+    semantic_threshold = float(review_diagnostics.get("semantic_threshold", 0.4))
+    semantic_low_count = sum(
+        1
+        for result in results
+        if result["reliability"].get("semantic_consistency_status") == "ok"
+        and result["reliability"].get("semantic_consistency_score") is not None
+        and float(result["reliability"]["semantic_consistency_score"]) < semantic_threshold
+    )
 
     return {
         "timestamp": datetime.now().isoformat() if include_runtime else DETERMINISTIC_TIMESTAMP,
@@ -281,12 +298,19 @@ def run_evaluation(
         "review_graph_available": review_diagnostics["available"],
         "review_graph_gate_strategy": review_diagnostics["gate_strategy"],
         "review_graph_very_low_confidence_floor": review_diagnostics["very_low_confidence_floor"],
+        "review_graph_semantic_threshold": review_diagnostics.get("semantic_threshold"),
         "review_graph_trigger_rate": round(review_trigger_count / len(results), 3) if results else 0.0,
         "review_graph_second_pass_rate": round(review_second_pass_count / len(results), 3) if results else 0.0,
+        "review_graph_semantic_trigger_rate": review_diagnostics.get("review_graph_semantic_trigger_rate", 0.0),
         "review_graph_trigger_reason_counts": review_trigger_reason_counts,
         "review_graph_trigger_reason_rates": review_trigger_reason_rates,
         "review_graph_cache_hit_rate": review_diagnostics["review_graph_cache_hit_rate"],
         "review_graph_cached_step_count": review_diagnostics["review_graph_cached_step_count"],
+        "semantic_score_availability_rate": round(semantic_scored_count / len(results), 3) if results else 0.0,
+        "semantic_degraded_rate": round(semantic_degraded_count / len(results), 3) if results else 0.0,
+        "semantic_low_consistency_rate": round(semantic_low_count / len(results), 3) if results else 0.0,
+        "semantic_low_consistency_count": semantic_low_count,
+        "semantic_degraded_count": semantic_degraded_count,
         "llm_runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
         "results": results,
         "metrics": metrics,
@@ -301,6 +325,7 @@ def save_results(
     review_acceptance_check: dict[str, object] | None = None,
 ) -> None:
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    json_output_path = str(Path(output_path).with_suffix(".json"))
     metrics = aggregated["metrics"]
     include_runtime = bool(aggregated.get("include_runtime", True))
     report_payload = copy.deepcopy(aggregated)
@@ -370,8 +395,10 @@ def save_results(
         handle.write(
             f"- Very Low Confidence Floor: {aggregated.get('review_graph_very_low_confidence_floor')}\n"
         )
+        handle.write(f"- Semantic Threshold: {aggregated.get('review_graph_semantic_threshold')}\n")
         handle.write(f"- Trigger Rate: {aggregated.get('review_graph_trigger_rate', 0.0):.3f}\n")
         handle.write(f"- Second-Pass Rate: {aggregated.get('review_graph_second_pass_rate', 0.0):.3f}\n")
+        handle.write(f"- Semantic Trigger Rate: {aggregated.get('review_graph_semantic_trigger_rate', 0.0):.3f}\n")
         handle.write(f"- Cache Hit Rate: {aggregated.get('review_graph_cache_hit_rate', 0.0):.3f}\n")
         trigger_reason_counts = aggregated.get("review_graph_trigger_reason_counts", {})
         handle.write("- Trigger Reasons:\n")
@@ -381,9 +408,19 @@ def save_results(
             "low_confidence_large_set",
             "low_confidence",
             "large_set",
+            "low_semantic_consistency",
         ):
             handle.write(f"  - {reason}: {trigger_reason_counts.get(reason, 0)}\n")
         handle.write("\n")
+
+        handle.write("## Semantic Consistency\n\n")
+        handle.write(f"- Score availability rate: {aggregated.get('semantic_score_availability_rate', 0.0):.3f}\n")
+        handle.write(f"- Degraded rate: {aggregated.get('semantic_degraded_rate', 0.0):.3f}\n")
+        handle.write(
+            f"- Low-consistency rate (< threshold): {aggregated.get('semantic_low_consistency_rate', 0.0):.3f}\n"
+        )
+        handle.write(f"- Low-consistency count: {aggregated.get('semantic_low_consistency_count', 0)}\n")
+        handle.write(f"- Degraded count: {aggregated.get('semantic_degraded_count', 0)}\n\n")
 
         runtime_breakdown = aggregated.get("runtime_breakdown") or {}
         should_render_runtime_breakdown = (
@@ -459,7 +496,11 @@ def save_results(
         handle.write(json.dumps(report_payload, indent=2))
         handle.write("\n```\n")
 
+    with open(json_output_path, "w", encoding="utf-8") as handle:
+        json.dump(report_payload, handle, indent=2)
+
     print(f"\n[INFO] Results saved to {output_path}")
+    print(f"[INFO] Results JSON saved to {json_output_path}")
 
 
 if __name__ == "__main__":

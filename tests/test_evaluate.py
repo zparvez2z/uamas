@@ -149,12 +149,20 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     assert aggregated["review_graph_backend"] in {"langgraph", "sequential"}
     assert aggregated["review_graph_gate_strategy"] in {"legacy", "latency_v1"}
     assert isinstance(aggregated["review_graph_very_low_confidence_floor"], float)
+    assert isinstance(aggregated["review_graph_semantic_threshold"], float)
     assert isinstance(aggregated["review_graph_trigger_rate"], float)
     assert isinstance(aggregated["review_graph_second_pass_rate"], float)
+    assert isinstance(aggregated["review_graph_semantic_trigger_rate"], float)
     assert isinstance(aggregated["review_graph_trigger_reason_counts"], dict)
+    assert "low_semantic_consistency" in aggregated["review_graph_trigger_reason_counts"]
     assert isinstance(aggregated["review_graph_trigger_reason_rates"], dict)
     assert isinstance(aggregated["review_graph_cache_hit_rate"], float)
     assert isinstance(aggregated["review_graph_cached_step_count"], int)
+    assert isinstance(aggregated["semantic_score_availability_rate"], float)
+    assert isinstance(aggregated["semantic_degraded_rate"], float)
+    assert isinstance(aggregated["semantic_low_consistency_rate"], float)
+    assert isinstance(aggregated["semantic_low_consistency_count"], int)
+    assert isinstance(aggregated["semantic_degraded_count"], int)
     assert aggregated["runtime_breakdown"] == {
         "live_count": 0,
         "mock_count": 3,
@@ -186,12 +194,16 @@ def test_save_results_is_stable_without_runtime(monkeypatch, tmp_path) -> None:
 
     evaluate.save_results(aggregated, output_path=str(first_path))
     evaluate.save_results(aggregated, output_path=str(second_path))
+    first_json = first_path.with_suffix(".json")
+    second_json = second_path.with_suffix(".json")
 
     report = first_path.read_text(encoding="utf-8")
 
     assert report == second_path.read_text(encoding="utf-8")
+    assert first_json.read_text(encoding="utf-8") == second_json.read_text(encoding="utf-8")
     assert "**Generated:** deterministic" in report
     assert "## Review Graph Tuning" in report
+    assert "## Semantic Consistency" in report
     assert "## LLM Runtime Breakdown" not in report
     assert "Runtime (ms)" not in report
     assert "avg_runtime_ms" not in report

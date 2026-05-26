@@ -5,6 +5,7 @@ from .classifier import CalibratedTextClassifier
 from .llm_wrappers import GitHubModelsClient
 from .models import ClassifierResult, PredictionResponse, ProductInput, ReliabilityMeta
 from .runtime_profile import resolve_runtime_settings
+from .semantic_scorer import SemanticConsistencyScorer
 from .scoring import apply_abstention_policy, build_prediction_set
 
 
@@ -49,6 +50,7 @@ class ReliabilityPipeline:
         self.max_set_size = int(os.getenv("MAX_SET_SIZE", "3"))
         self.enable_abstain = os.getenv("ENABLE_ABSTAIN", "true").lower() == "true"
         self.llm = GitHubModelsClient()
+        self.semantic_scorer = SemanticConsistencyScorer(self.LABELS)
         self.classifier = CalibratedTextClassifier(
             self.LABELS,
             self.alpha,
@@ -66,6 +68,7 @@ class ReliabilityPipeline:
             max_set_size=self.max_set_size,
             enable_abstain=self.enable_abstain,
         )
+        semantic = self.semantic_scorer.score(item, candidate_labels=category_set)
 
         attributes = self.llm.extract_attributes(item.title, item.description)
 
@@ -91,6 +94,9 @@ class ReliabilityPipeline:
                 classifier_diagnostics.get("artifact_rebuild_status", "not_needed")
             ),
             classifier_artifact_rebuild_reason=classifier_diagnostics.get("artifact_rebuild_reason"),
+            semantic_consistency_score=semantic.score,
+            semantic_consistency_status=semantic.status,
+            semantic_consistency_reason=semantic.reason,
             coverage_threshold=float(classifier_diagnostics["coverage_threshold"]),
         )
 

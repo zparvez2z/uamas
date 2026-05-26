@@ -13,6 +13,9 @@ def build_response(
     confidence: float,
     set_size: int,
     abstained: bool = False,
+    semantic_score: float | None = None,
+    semantic_status: str = "disabled",
+    semantic_reason: str | None = None,
 ) -> PredictionResponse:
     category_set = [] if abstained else [f"L{i}" for i in range(set_size)]
     return PredictionResponse(
@@ -32,6 +35,9 @@ def build_response(
             classifier_reason=None,
             classifier_artifact_path=None,
             classifier_model_type="embedding",
+            semantic_consistency_score=semantic_score,
+            semantic_consistency_status=semantic_status,
+            semantic_consistency_reason=semantic_reason,
             coverage_threshold=0.7,
         ),
     )
@@ -254,3 +260,30 @@ def test_latency_v1_graph_and_sequential_trigger_decisions_match() -> None:
 
     assert graph_response.reliability.review_trigger_reason == "low_confidence_large_set"
     assert graph_response.reliability.review_trigger_reason == sequential_response.reliability.review_trigger_reason
+
+
+def test_review_graph_triggers_on_low_semantic_consistency() -> None:
+    pipeline = StubPipeline(
+        [
+            build_response(
+                confidence=0.9,
+                set_size=1,
+                semantic_score=0.1,
+                semantic_status="ok",
+            )
+        ],
+        second_pass_confidences=[0.8],
+    )
+    runner = ReviewGraphRunner(
+        pipeline,
+        enabled=True,
+        confidence_threshold=0.55,
+        set_size_trigger=3,
+        semantic_threshold=0.4,
+    )
+
+    response = runner.predict(ProductInput(title="product", description="desc"))
+
+    assert response.reliability.review_trigger_reason == "low_semantic_consistency"
+    assert response.reliability.review_outcome in {"first_pass_retained", "second_pass_selected"}
+    assert runner.diagnostics()["review_graph_semantic_trigger_rate"] > 0.0

@@ -35,6 +35,9 @@ class ReliabilityMeta(BaseModel):
     classifier_artifact_rebuild_attempted: bool = False
     classifier_artifact_rebuild_status: str = "not_needed"
     classifier_artifact_rebuild_reason: Optional[str] = None
+    semantic_consistency_score: Optional[float] = None
+    semantic_consistency_status: str = "disabled"
+    semantic_consistency_reason: Optional[str] = None
     review_graph_used: bool = False
     review_trigger_reason: Optional[str] = None
     review_outcome: Optional[str] = None

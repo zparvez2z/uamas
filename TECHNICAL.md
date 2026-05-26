@@ -36,11 +36,13 @@ flowchart LR
 
   P --> C[Embedding-first Classifier\nHashing+SVD+LogReg]
   P --> S[Calibrated Set Builder\nalpha / max set size]
+  P --> SC[Semantic Consistency Scorer\nEmbedding similarity]
   P --> L[GitHub Models Client\nazure-ai-inference]
   C -. optional .-> C2[TF-IDF classifier mode]
 
   C --> M[Category Set]
   S --> R[Reliability Metadata]
+  SC --> R
   L --> A[Structured Attribute Extraction\nPydantic schema]
 
   A --> O[Rendered Result\nHTML response]
@@ -54,6 +56,7 @@ flowchart LR
     E4[ALPHA]
     E5[runtime_profile.json]
     E6[ENABLE_LANGGRAPH_REVIEW]
+    E7[ENABLE_SEMANTIC_SCORER]
   end
 
   Config --> RG
@@ -74,11 +77,12 @@ flowchart LR
 1. The browser submits a product title and description to `POST /predict`.
 2. `ReliabilityPipeline.predict()` creates a category score vector from a embedding-first (hashing+SVD) + logistic regression classifier trained on the processed training split. If scikit-learn or data files are unavailable, it falls back to the keyword scorer.
 3. The set builder keeps labels until cumulative probability crosses the calibrated cumulative-mass threshold computed on the calibration split.
-4. Optional review mode (`ENABLE_LANGGRAPH_REVIEW=true`) can run a second prediction pass for abstained/low-confidence outputs and keeps the stronger result.
-5. `GitHubModelsClient.extract_attributes()` calls the model or falls back to a deterministic extractor.
-6. The response is validated through the Pydantic models in `reliable_genai/models.py`.
-7. The FastAPI route serializes the full response for the template.
-8. `GET /diagnostics` reports runtime mode, endpoint, token presence, and the last inference path.
+4. `SemanticConsistencyScorer` computes an embedding-based consistency score and status (`ok`, `degraded`, or `disabled`).
+5. Optional review mode (`ENABLE_LANGGRAPH_REVIEW=true`) can run a second prediction pass for abstained/low-confidence/low-semantic-consistency outputs and keeps the stronger result.
+6. `GitHubModelsClient.extract_attributes()` calls the model or falls back to a deterministic extractor.
+7. The response is validated through the Pydantic models in `reliable_genai/models.py`.
+8. The FastAPI route serializes the full response for the template.
+9. `GET /diagnostics` reports runtime mode, endpoint, token presence, and review/semantic health fields.
 
 ## 5) Files and Responsibilities
 ### `app/main.py`
@@ -159,6 +163,9 @@ The response includes:
 - `classifier_artifact_rebuild_attempted`
 - `classifier_artifact_rebuild_status`
 - `classifier_artifact_rebuild_reason`
+- `semantic_consistency_score`
+- `semantic_consistency_status`
+- `semantic_consistency_reason`
 - `coverage_threshold`
 
 These fields make the behavior explainable during a review or demo and also support regression checks when the pipeline changes.
@@ -177,6 +184,7 @@ These fields make the behavior explainable during a review or demo and also supp
 - artifact rejection reason when strict checks reject a candidate artifact,
 - artifact rebuild status and reason when auto-rebuild is active,
 - classifier readiness and fallback reason,
+- semantic scorer enablement/health/threshold fields,
 - classifier artifact path,
 - and the active calibrated coverage threshold.
 
@@ -215,6 +223,10 @@ Behavior flags:
 - `REVIEW_CACHE_TTL_SECONDS` (default `300`, TTL for review graph second-pass node cache)
 - `REVIEW_GATE_STRATEGY` (`legacy` default, optional `latency_v1`)
 - `REVIEW_VERY_LOW_CONFIDENCE_FLOOR` (default `0.35`, used by `latency_v1`)
+- `ENABLE_SEMANTIC_SCORER` (`true` default)
+- `GITHUB_MODELS_EMBEDDING_MODEL` (default `openai/text-embedding-3-small`)
+- `SEMANTIC_CONSISTENCY_THRESHOLD` (default `0.4`, semantic review trigger threshold)
+- `SEMANTIC_MAX_RETRIES` (default `1`)
 
 Classifier-critical precedence across app and scripts:
 - CLI args (when available) > explicit env vars > runtime profile > hardcoded defaults.
