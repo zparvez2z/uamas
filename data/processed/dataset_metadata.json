@@ -1,16 +1,33 @@
 {
-  "total_rows": 180,
-  "categories": [
-    "Beauty",
+  "source": "shopify_api",
+  "source_url": "https://huggingface.co/datasets/Shopify/product-catalogue",
+  "ingested_at_utc": "2026-06-06T14:19:08.876141+00:00",
+  "split_seed": 42,
+  "mapping_version": 1,
+  "source_rows": 48289,
+  "normalized_rows": 27108,
+  "skipped_counts": {
+    "unmapped_category": 21181
+  },
+  "category_counts": {
+    "Beauty": 2286,
+    "Clothing": 2577,
+    "Electronics": 4144,
+    "Home": 10590,
+    "Shoes": 409,
+    "Sports": 7102
+  },
+  "target_labels": [
+    "Shoes",
     "Clothing",
     "Electronics",
     "Home",
-    "Shoes",
+    "Beauty",
     "Sports"
   ],
   "split_counts": {
-    "train": 125,
-    "calibration": 24,
-    "test": 31
+    "train": 18972,
+    "calibration": 4063,
+    "test": 4073
   }
 }
