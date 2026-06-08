@@ -132,6 +132,9 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
 
     assert aggregated["timestamp"] == "deterministic"
     assert aggregated["include_runtime"] is False
+    assert aggregated["total_products"] == 3
+    assert aggregated["full_dataset_size"] == 3
+    assert aggregated["sample_size"] is None
     assert aggregated["classifier_mode"] == "embedding_logreg_calibrated"
     assert aggregated["classifier_runtime"] == "TRAINED"
     assert aggregated["classifier_model_type"] == "embedding"
@@ -179,6 +182,50 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     assert metrics["abstention_count"] == 1
     assert metrics["abstention_rate"] == 0.333
     assert metrics["avg_runtime_ms"] == 0.0
+
+
+def test_run_evaluation_can_use_deterministic_sample(monkeypatch) -> None:
+    rows = [
+        {"title": "shoe product", "description": "", "category": "Shoes"},
+        {"title": "ambiguous product", "description": "", "category": "Home"},
+        {"title": "abstain product", "description": "", "category": "Beauty"},
+    ]
+    monkeypatch.setattr(evaluate, "ReliabilityPipeline", FakePipeline)
+    monkeypatch.setattr(evaluate, "load_labeled_dataset", lambda: rows)
+
+    aggregated = evaluate.run_evaluation(use_mock=True, sample_size=2)
+
+    assert aggregated["total_products"] == 2
+    assert aggregated["full_dataset_size"] == 3
+    assert aggregated["sample_size"] == 2
+    assert [result["title"] for result in aggregated["results"]] == [
+        "shoe product",
+        "abstain product",
+    ]
+
+
+def test_select_evaluation_sample_spreads_across_dataset() -> None:
+    rows = [{"title": f"product {index}", "description": "", "category": "Shoes"} for index in range(5)]
+
+    sample = evaluate.select_evaluation_sample(rows, 3)
+
+    assert [row["title"] for row in sample] == ["product 0", "product 2", "product 4"]
+
+
+def test_run_evaluation_rejects_non_positive_sample_size(monkeypatch) -> None:
+    monkeypatch.setattr(evaluate, "ReliabilityPipeline", FakePipeline)
+    monkeypatch.setattr(
+        evaluate,
+        "load_labeled_dataset",
+        lambda: [{"title": "shoe product", "description": "", "category": "Shoes"}],
+    )
+
+    try:
+        evaluate.run_evaluation(use_mock=True, sample_size=0)
+    except ValueError as exc:
+        assert "sample_size must be positive" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
 
 
 def test_save_results_is_stable_without_runtime(monkeypatch, tmp_path) -> None:
@@ -296,6 +343,7 @@ def test_save_results_includes_review_acceptance_section(monkeypatch, tmp_path) 
     acceptance = {
         "date": "2026-05-25",
         "runtime_mode": "USE_MOCK_LLM=true, ENABLE_LANGGRAPH_REVIEW=true",
+        "sample_size": 25,
         "baseline_config": {
             "review_gate_strategy": "legacy",
             "review_set_size_trigger": 3,
@@ -320,6 +368,7 @@ def test_save_results_includes_review_acceptance_section(monkeypatch, tmp_path) 
     report = output.read_text(encoding="utf-8")
 
     assert "## Review Trigger Reduction Acceptance Check (2026-05-25)" in report
+    assert "- Evaluation sample size: `25`" in report
     assert "- Baseline trigger rate: **0.581**" in report
     assert "- Tuned trigger rate: **0.097** (target: `<= 0.250`)" in report
     assert "guardrail: no worse than `-0.010`" in report
@@ -331,7 +380,10 @@ def test_run_review_trigger_acceptance_check_computes_comparison_and_restores_en
     monkeypatch.setenv("REVIEW_VERY_LOW_CONFIDENCE_FLOOR", "0.99")
     monkeypatch.setenv("ENABLE_LANGGRAPH_REVIEW", "false")
 
-    def fake_run_evaluation(use_mock=True, alpha=None, max_set_size=None, include_runtime=False):
+    observed_sample_sizes = []
+
+    def fake_run_evaluation(use_mock=True, alpha=None, max_set_size=None, include_runtime=False, sample_size=None):
+        observed_sample_sizes.append(sample_size)
         gate = os.getenv("REVIEW_GATE_STRATEGY")
         if gate == "legacy":
             return {
@@ -349,7 +401,7 @@ def test_run_review_trigger_acceptance_check_computes_comparison_and_restores_en
 
     monkeypatch.setattr(evaluate, "run_evaluation", fake_run_evaluation)
 
-    result = evaluate.run_review_trigger_acceptance_check(use_mock=True)
+    result = evaluate.run_review_trigger_acceptance_check(use_mock=True, sample_size=50)
 
     assert result["baseline_trigger_rate"] == 0.6
     assert result["tuned_trigger_rate"] == 0.1
@@ -361,6 +413,8 @@ def test_run_review_trigger_acceptance_check_computes_comparison_and_restores_en
     assert result["baseline_config"]["review_set_size_trigger"] == 3
     assert result["tuned_config"]["review_set_size_trigger"] == 4
     assert result["tuned_config"]["review_very_low_confidence_floor"] == 0.35
+    assert result["sample_size"] == 50
+    assert observed_sample_sizes == [50, 50]
 
     assert os.getenv("REVIEW_GATE_STRATEGY") == "original"
     assert os.getenv("REVIEW_SET_SIZE_TRIGGER") == "99"

@@ -38,6 +38,19 @@ def load_labeled_dataset(path: Path = DEFAULT_TEST_PATH) -> list[dict[str, str]]
     return rows
 
 
+def select_evaluation_sample(rows: list[dict[str, str]], sample_size: int | None) -> list[dict[str, str]]:
+    """Select a deterministic spread across the dataset for fast CI checks."""
+    if sample_size is None or sample_size >= len(rows):
+        return rows
+    if sample_size <= 0:
+        raise ValueError("sample_size must be positive when provided")
+    if sample_size == 1:
+        return [rows[0]]
+
+    last_index = len(rows) - 1
+    return [rows[round(index * last_index / (sample_size - 1))] for index in range(sample_size)]
+
+
 DETERMINISTIC_TIMESTAMP = "deterministic"
 
 
@@ -79,7 +92,10 @@ def temporary_env(overrides: dict[str, str | None]):
                 os.environ[key] = value
 
 
-def run_review_trigger_acceptance_check(use_mock: bool = True) -> dict[str, object]:
+def run_review_trigger_acceptance_check(
+    use_mock: bool = True,
+    sample_size: int | None = None,
+) -> dict[str, object]:
     baseline_overrides = {
         "ENABLE_LANGGRAPH_REVIEW": "true",
         "REVIEW_GATE_STRATEGY": "legacy",
@@ -93,14 +109,15 @@ def run_review_trigger_acceptance_check(use_mock: bool = True) -> dict[str, obje
     }
 
     with temporary_env(baseline_overrides):
-        baseline = run_evaluation(use_mock=use_mock, include_runtime=False)
+        baseline = run_evaluation(use_mock=use_mock, include_runtime=False, sample_size=sample_size)
     with temporary_env(tuned_overrides):
-        tuned = run_evaluation(use_mock=use_mock, include_runtime=False)
+        tuned = run_evaluation(use_mock=use_mock, include_runtime=False, sample_size=sample_size)
 
     coverage_delta = round(tuned["metrics"]["empirical_coverage"] - baseline["metrics"]["empirical_coverage"], 3)
     return {
         "date": datetime.now().date().isoformat(),
         "runtime_mode": f"USE_MOCK_LLM={'true' if use_mock else 'false'}, ENABLE_LANGGRAPH_REVIEW=true",
+        "sample_size": sample_size,
         "baseline_config": {
             "review_gate_strategy": "legacy",
             "review_set_size_trigger": DEFAULT_ACCEPTANCE_BASELINE_SET_SIZE_TRIGGER,
@@ -127,6 +144,7 @@ def run_evaluation(
     alpha: float | None = None,
     max_set_size: int | None = None,
     include_runtime: bool = False,
+    sample_size: int | None = None,
 ) -> dict:
     if alpha is not None:
         os.environ["ALPHA"] = str(alpha)
@@ -155,9 +173,12 @@ def run_evaluation(
     )
 
     rows = load_labeled_dataset()
+    full_dataset_size = len(rows)
+    rows = select_evaluation_sample(rows, sample_size)
     results = []
 
-    print(f"\n[INFO] Running labeled evaluation on {len(rows)} products...\n")
+    sample_note = f" from {full_dataset_size}" if len(rows) != full_dataset_size else ""
+    print(f"\n[INFO] Running labeled evaluation on {len(rows)}{sample_note} products...\n")
     for idx, row in enumerate(rows, 1):
         product = ProductInput(
             title=row["title"],
@@ -275,6 +296,8 @@ def run_evaluation(
     return {
         "timestamp": datetime.now().isoformat() if include_runtime else DETERMINISTIC_TIMESTAMP,
         "total_products": len(results),
+        "full_dataset_size": full_dataset_size,
+        "sample_size": sample_size,
         "classifier_mode": classifier_mode,
         "classifier_ready": pipeline.classifier.is_ready,
         "classifier_reason": pipeline.classifier.reason,
@@ -358,6 +381,8 @@ def save_results(
             tuned_config = review_acceptance_check["tuned_config"]
             handle.write(f"## Review Trigger Reduction Acceptance Check ({review_acceptance_check['date']})\n\n")
             handle.write(f"- Runtime mode: `{review_acceptance_check['runtime_mode']}`\n")
+            if review_acceptance_check.get("sample_size"):
+                handle.write(f"- Evaluation sample size: `{review_acceptance_check['sample_size']}`\n")
             handle.write(
                 "- Baseline config: "
                 f"`REVIEW_GATE_STRATEGY={baseline_config['review_gate_strategy']}`, "
@@ -453,6 +478,9 @@ def save_results(
         handle.write("| Metric | Value |\n")
         handle.write("|--------|-------|\n")
         handle.write(f"| Total Products Tested | {aggregated['total_products']} |\n")
+        if aggregated.get("sample_size"):
+            handle.write(f"| Full Dataset Size | {aggregated.get('full_dataset_size')} |\n")
+            handle.write(f"| Evaluation Sample Size | {aggregated.get('sample_size')} |\n")
         handle.write(f"| Target Coverage | {metrics['target_coverage']:.3f} |\n")
         handle.write(f"| Calibrated Cumulative Threshold | {metrics['calibrated_cumulative_threshold']:.4f} |\n")
         handle.write(f"| Empirical Coverage | {metrics['empirical_coverage']:.3f} |\n")
@@ -516,14 +544,24 @@ if __name__ == "__main__":
         action="store_true",
         help="Run legacy vs latency_v1 benchmark and include acceptance section in report",
     )
+    parser.add_argument(
+        "--sample-size",
+        type=int,
+        default=None,
+        help="Evaluate a deterministic spread of N labeled rows; default evaluates the full dataset",
+    )
     parser.add_argument("--output", default="reports/results.md", help="Markdown report output path")
     args = parser.parse_args()
 
     try:
         use_mock = resolve_use_mock(args)
-        aggregated_results = run_evaluation(use_mock=use_mock, include_runtime=args.include_runtime)
+        aggregated_results = run_evaluation(
+            use_mock=use_mock,
+            include_runtime=args.include_runtime,
+            sample_size=args.sample_size,
+        )
         review_acceptance_check = (
-            run_review_trigger_acceptance_check(use_mock=use_mock)
+            run_review_trigger_acceptance_check(use_mock=use_mock, sample_size=args.sample_size)
             if args.with_review_acceptance_check
             else None
         )

@@ -47,15 +47,15 @@ jobs:
       - name: Compile Python modules
         run: python -m compileall app reliable_genai scripts tests
 
-      - name: Run mock evaluation
+      - name: Run sampled mock evaluation smoke check
         env:
           USE_MOCK_LLM: "true"
-        run: python scripts/evaluate.py
+        run: python scripts/evaluate.py --sample-size 250 --output /tmp/ci-results.md
 
-      - name: Run mock evaluation with acceptance check
+      - name: Run sampled review acceptance section smoke check
         env:
           USE_MOCK_LLM: "true"
-        run: python scripts/evaluate.py --mock --with-review-acceptance-check --output /tmp/results-with-acceptance.md
+        run: python scripts/evaluate.py --mock --sample-size 250 --with-review-acceptance-check --output /tmp/results-with-acceptance.md
 
       - name: Verify acceptance section present
         run: grep -q "Review Trigger Reduction Acceptance Check" /tmp/results-with-acceptance.md
