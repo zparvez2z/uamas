@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from reliable_genai.models import ProductInput
+from reliable_genai.persistence import SQLiteReviewStore
 from reliable_genai.pipeline import ReliabilityPipeline
 from reliable_genai.review_graph import ReviewGraphRunner
 
@@ -21,6 +22,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 pipeline = ReliabilityPipeline()
 review_graph = ReviewGraphRunner(pipeline)
+review_store = SQLiteReviewStore()
 RESULTS_JSON_PATH = Path("reports/results.json")
 RESULTS_MD_PATH = Path("reports/results.md")
 
@@ -41,6 +43,7 @@ def build_diagnostics() -> dict:
             "degraded_requests": 0,
         }
     review_diagnostics = review_graph.diagnostics()
+    persistence_diagnostics = review_store.diagnostics()
     artifact_metadata = classifier_diagnostics.get("artifact_metadata", {}) or {}
     return {
         "status": "ok",
@@ -86,6 +89,12 @@ def build_diagnostics() -> dict:
         "semantic_scorer_model": semantic_diagnostics.get("model"),
         "semantic_scorer_degraded_rate": semantic_diagnostics.get("degraded_rate"),
         "semantic_scorer_degraded_requests": semantic_diagnostics.get("degraded_requests"),
+        "persistence_available": persistence_diagnostics.get("available"),
+        "persistence_db_path": persistence_diagnostics.get("db_path"),
+        "persistence_error": persistence_diagnostics.get("error"),
+        "listing_count": persistence_diagnostics.get("listing_count"),
+        "review_task_count": persistence_diagnostics.get("review_task_count"),
+        "pending_review_task_count": persistence_diagnostics.get("pending_review_task_count"),
     }
 
 

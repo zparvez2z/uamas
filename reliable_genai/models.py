@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -48,6 +48,55 @@ class PredictionResponse(BaseModel):
     category_set: List[str]
     attributes: ProductAttributes
     reliability: ReliabilityMeta
+
+
+class ListingInput(ProductInput):
+    external_id: Optional[str] = None
+
+
+class AgentTrace(BaseModel):
+    agent: str
+    status: str
+    output: Dict[str, object] = Field(default_factory=dict)
+    reason: Optional[str] = None
+
+
+class CatalogQualityDecision(BaseModel):
+    listing_id: str
+    decision: Literal["auto_accept", "needs_human_review", "reject_or_request_clarification"]
+    risk_level: Literal["low", "medium", "high"]
+    explanation: str
+    category_set: List[str]
+    attributes: ProductAttributes
+    reliability: ReliabilityMeta
+    agent_trace: List[AgentTrace] = Field(default_factory=list)
+    review_task_id: Optional[str] = None
+
+
+class ReviewTask(BaseModel):
+    id: str
+    listing_id: str
+    prediction_id: Optional[str] = None
+    status: Literal["pending", "approved", "corrected", "rejected"] = "pending"
+    reason: str
+    risk_level: Literal["low", "medium", "high"] = "high"
+    corrected_category: Optional[str] = None
+    corrected_attributes: Dict[str, object] = Field(default_factory=dict)
+    notes: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class ReviewQueueItem(ReviewTask):
+    title: str
+    description: str = ""
+
+
+class ReviewDecision(BaseModel):
+    action: Literal["approve", "correct", "reject"]
+    corrected_category: Optional[str] = None
+    corrected_attributes: Dict[str, object] = Field(default_factory=dict)
+    notes: Optional[str] = None
 
 
 class LLMExtraction(BaseModel):

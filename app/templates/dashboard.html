@@ -44,6 +44,18 @@
     </section>
 
     <section class="card dashboard-span">
+      <h2>Review Queue Storage</h2>
+      <div class="diagnostics-grid">
+        <div><span>Available</span><strong>{{ "Yes" if diagnostics.persistence_available else "No" }}</strong></div>
+        <div><span>Database</span><strong>{{ diagnostics.persistence_db_path }}</strong></div>
+        <div><span>Listings stored</span><strong>{{ diagnostics.listing_count }}</strong></div>
+        <div><span>Review tasks</span><strong>{{ diagnostics.review_task_count }}</strong></div>
+        <div><span>Pending tasks</span><strong>{{ diagnostics.pending_review_task_count }}</strong></div>
+        <div><span>Error</span><strong>{{ diagnostics.persistence_error or "None" }}</strong></div>
+      </div>
+    </section>
+
+    <section class="card dashboard-span">
       <h2>Review Trigger Telemetry</h2>
       <div class="diagnostics-grid">
         <div><span>Trigger rate</span><strong>{{ diagnostics.review_graph_trigger_rate }}</strong></div>

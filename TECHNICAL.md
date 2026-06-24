@@ -33,6 +33,7 @@ flowchart LR
   UI --> RG[ReviewGraphRunner\nreliable_genai/review_graph.py]
   RG --> P[ReliabilityPipeline\nreliable_genai/pipeline.py]
   UI --> D[Diagnostics Endpoint\nGET /diagnostics]
+  UI --> DB[(SQLite Review Store\ndata/uamas.db)]
 
   P --> C[Embedding-first Classifier\nHashing+SVD+LogReg]
   P --> S[Calibrated Set Builder\nalpha / max set size]
@@ -48,6 +49,7 @@ flowchart LR
   A --> O[Rendered Result\nHTML response]
   M --> O
   R --> O
+  DB --> D
 
   subgraph Config[Environment / Runtime Configuration]
     E1[.env]
@@ -57,12 +59,14 @@ flowchart LR
     E5[runtime_profile.json]
     E6[ENABLE_LANGGRAPH_REVIEW]
     E7[ENABLE_SEMANTIC_SCORER]
+    E8[UAMAS_DB_PATH]
   end
 
   Config --> RG
   Config --> P
   Config --> L
   Config --> UI
+  Config --> DB
 ```
 
 ### Runtime components
@@ -70,6 +74,7 @@ flowchart LR
 - `reliable_genai/review_graph.py` optionally orchestrates second-pass review through LangGraph when enabled.
 - `reliable_genai/pipeline.py` implements the classification, set construction, and response assembly logic.
 - `reliable_genai/llm_wrappers.py` handles GitHub Models access, mock mode, and fallback extraction.
+- `reliable_genai/persistence.py` owns SQLite schema creation and repository operations for listings, predictions, and review tasks.
 - `reliable_genai/runtime_profile.py` resolves classifier-critical runtime defaults and precedence.
 - `reliable_genai/models.py` defines the Pydantic request and response models.
 
@@ -82,14 +87,15 @@ flowchart LR
 6. `GitHubModelsClient.extract_attributes()` calls the model or falls back to a deterministic extractor.
 7. The response is validated through the Pydantic models in `reliable_genai/models.py`.
 8. The FastAPI route serializes the full response for the template.
-9. `GET /diagnostics` reports runtime mode, endpoint, token presence, and review/semantic health fields.
+9. `GET /diagnostics` reports runtime mode, endpoint, token presence, review/semantic health fields, and SQLite persistence health.
 
 ## 5) Files and Responsibilities
 ### `app/main.py`
 - Serves the homepage.
 - Handles `POST /predict`.
-- Exposes `GET /health` and `GET /diagnostics`.
+- Exposes `GET /health`, `GET /diagnostics`, and `GET /dashboard`.
 - Passes runtime metadata and diagnostics into the Jinja template context.
+- Initializes the SQLite review store used by the next review-queue workflow slice.
 
 ### `reliable_genai/pipeline.py`
 - Creates the category prediction through the calibrated classifier or keyword fallback.
@@ -142,6 +148,14 @@ flowchart LR
 ### `reliable_genai/models.py`
 - Defines request and response schemas.
 - Carries reliability metadata such as runtime mode, model name, and confidence values.
+- Defines additive catalog workflow contracts such as `ListingInput`, `CatalogQualityDecision`, `ReviewTask`, `ReviewDecision`, and `ReviewQueueItem`.
+
+### `reliable_genai/persistence.py`
+- Creates the SQLite schema on startup.
+- Stores submitted listings, prediction payloads, and review tasks.
+- Supports review task listing and approve/correct/reject state transitions.
+- Reports persistence diagnostics for the dashboard and `/diagnostics`.
+- Defaults to `data/uamas.db` and supports `UAMAS_DB_PATH` override.
 
 ## 6) Reliability Metadata
 The response includes:
@@ -185,6 +199,7 @@ These fields make the behavior explainable during a review or demo and also supp
 - artifact rebuild status and reason when auto-rebuild is active,
 - classifier readiness and fallback reason,
 - semantic scorer enablement/health/threshold fields,
+- SQLite persistence availability, database path, listing count, review task count, and pending task count,
 - classifier artifact path,
 - and the active calibrated coverage threshold.
 
@@ -227,6 +242,7 @@ Behavior flags:
 - `GITHUB_MODELS_EMBEDDING_MODEL` (default `openai/text-embedding-3-small`)
 - `SEMANTIC_CONSISTENCY_THRESHOLD` (default `0.4`, semantic review trigger threshold)
 - `SEMANTIC_MAX_RETRIES` (default `1`)
+- `UAMAS_DB_PATH` (default `data/uamas.db`, SQLite persistence path)
 
 Classifier-critical precedence across app and scripts:
 - CLI args (when available) > explicit env vars > runtime profile > hardcoded defaults.
@@ -261,6 +277,7 @@ reliable_genai/
   evaluation.py
   llm_wrappers.py
   pipeline.py
+  persistence.py
 app/
   main.py
   templates/
@@ -275,7 +292,7 @@ reports/
 ```
 
 ## 11) Public Data Assumptions
-The project is intended to work with public or synthetic product data. The CSV contract is modeled after the Kaufland Seller API format, but the demo does not require private data.
+The project now uses processed public Shopify product catalogue data for training/evaluation. Large raw/cache data is intentionally not committed. The ingestion path records source provenance and category distribution in `data/processed/dataset_metadata.json`.
 
 ## 12) Next Technical Enhancements
 Possible next steps if the project is extended:

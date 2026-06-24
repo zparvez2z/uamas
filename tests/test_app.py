@@ -56,6 +56,12 @@ def test_diagnostics_include_classifier_runtime_metadata() -> None:
     assert "semantic_scorer_model" in diagnostics
     assert "semantic_scorer_degraded_rate" in diagnostics
     assert "semantic_scorer_degraded_requests" in diagnostics
+    assert "persistence_available" in diagnostics
+    assert "persistence_db_path" in diagnostics
+    assert "persistence_error" in diagnostics
+    assert "listing_count" in diagnostics
+    assert "review_task_count" in diagnostics
+    assert "pending_review_task_count" in diagnostics
 
 
 def test_diagnostics_report_auto_rebuild_for_mismatched_artifact(monkeypatch, tmp_path: Path) -> None:
@@ -161,6 +167,7 @@ def test_dashboard_renders_with_artifact(monkeypatch) -> None:
     assert response.status_code == 200
     html = response.body.decode("utf-8")
     assert "Reliability Dashboard" in html
+    assert "Review Queue Storage" in html
     assert "Trigger Reason Distribution" in html
     assert "Latest Results (JSON)" in html
 

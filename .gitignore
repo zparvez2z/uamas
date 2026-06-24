@@ -6,3 +6,6 @@ __pycache__/
 private/
 resources/
 artifacts/
+data/*.db
+data/*.sqlite
+data/*.sqlite3

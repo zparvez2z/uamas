@@ -15,7 +15,8 @@ Current state:
 - Semantic consistency scorer is implemented.
 - Optional LangGraph review flow exists.
 - Dashboard, diagnostics, deterministic evaluation artifacts, CI, and live smoke are in place.
-- Current dataset is synthetic/demo-oriented and must be replaced or supplemented with real product data.
+- Real Shopify product data is ingested into deterministic processed train/calibration/test splits.
+- SQLite persistence foundation is being added for listings, predictions, and review tasks.
 - True multi-agent behavior is not yet implemented; current graph is orchestration around one reliability pipeline.
 
 Target state:
@@ -64,6 +65,8 @@ The multi-agent version should introduce explicit agents with clear responsibili
 
 ### Phase 1: Real Product Data Ingestion
 Move from synthetic/demo data to a real public product dataset before expanding the operational workflow.
+
+Status: **implemented** for the Shopify Product Catalogue path. Processed split files and provenance metadata are committed under `data/processed/`; large raw/cache data is intentionally not committed.
 
 Preferred first source:
 - **Shopify Product Catalogue** because it includes real product titles, descriptions, categories, brand-like fields, and a product taxonomy classification shape close to the current pipeline.
@@ -131,6 +134,8 @@ Real-data acceptance criteria:
 
 ### Phase 2: Persistence + Review Queue
 Add a minimal operational data layer first. This is the fastest way to make the system real.
+
+Status: **in progress**. The first persistence slice adds SQLite schema creation and repository operations for listings, predictions, and review tasks. API/UI review queue workflows are the next slice.
 
 Use SQLite as the first database backend.
 
