@@ -89,11 +89,25 @@ flowchart LR
 8. The FastAPI route serializes the full response for the template.
 9. `GET /diagnostics` reports runtime mode, endpoint, token presence, review/semantic health fields, and SQLite persistence health.
 
+### Catalog review API flow
+1. A caller submits title/description to `POST /api/listings/analyze`.
+2. The app runs the existing `ReviewGraphRunner` prediction path.
+3. The listing and prediction payload are persisted to SQLite.
+4. A simple policy maps the reliability metadata to `auto_accept` or `needs_human_review`.
+5. When review is needed, the app creates a persisted `pending` review task.
+6. Reviewers can inspect tasks through `GET /api/review-queue` and `GET /api/review-queue/{task_id}`.
+7. Reviewers can record `approve`, `correct`, or `reject` decisions with `POST /api/review-queue/{task_id}/decision`.
+
 ## 5) Files and Responsibilities
 ### `app/main.py`
 - Serves the homepage.
 - Handles `POST /predict`.
 - Exposes `GET /health`, `GET /diagnostics`, and `GET /dashboard`.
+- Exposes catalog review JSON endpoints:
+  - `POST /api/listings/analyze`
+  - `GET /api/review-queue`
+  - `GET /api/review-queue/{task_id}`
+  - `POST /api/review-queue/{task_id}/decision`
 - Passes runtime metadata and diagnostics into the Jinja template context.
 - Initializes the SQLite review store used by the next review-queue workflow slice.
 

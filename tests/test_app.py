@@ -6,6 +6,8 @@ from starlette.requests import Request
 
 from app import main as app_main
 from reliable_genai.classifier import CalibratedTextClassifier
+from reliable_genai.models import ListingInput, PredictionResponse, ProductAttributes, ReliabilityMeta, ReviewDecision
+from reliable_genai.persistence import SQLiteReviewStore
 from reliable_genai.review_graph import ReviewGraphRunner
 
 
@@ -15,6 +17,52 @@ def _write_rows(path: Path, rows: list[dict[str, str]]) -> None:
 
 def _build_request(path: str) -> Request:
     return Request({"type": "http", "method": "GET", "path": path, "headers": []})
+
+
+def _prediction(
+    *,
+    category_set: list[str] | None = None,
+    confidence: float = 0.9,
+    abstained: bool = False,
+    semantic_score: float | None = 0.8,
+    semantic_status: str = "ok",
+) -> PredictionResponse:
+    category_set = [] if category_set is None and abstained else category_set or ["Shoes"]
+    return PredictionResponse(
+        category_set=category_set,
+        attributes=ProductAttributes(brand="Acme", color="black", material="mesh", size="42"),
+        reliability=ReliabilityMeta(
+            alpha=0.1,
+            coverage_target=0.9,
+            set_size=len(category_set),
+            confidence=confidence,
+            abstained=abstained,
+            reason="abstained" if abstained else None,
+            policy_action="abstain" if abstained else "set_output",
+            llm_runtime="MOCK",
+            llm_model="mock-model",
+            classifier_runtime="ARTIFACT",
+            classifier_reason=None,
+            classifier_artifact_path="artifacts/classifier.joblib",
+            classifier_model_type="embedding",
+            semantic_consistency_score=semantic_score,
+            semantic_consistency_status=semantic_status,
+            semantic_consistency_reason=None,
+            coverage_threshold=0.9,
+        ),
+    )
+
+
+class StubReviewGraph:
+    def __init__(self, prediction: PredictionResponse) -> None:
+        self.prediction = prediction
+
+    def predict(self, payload):
+        return self.prediction
+
+    @staticmethod
+    def diagnostics() -> dict:
+        return {"semantic_threshold": 0.4}
 
 
 def test_diagnostics_include_classifier_runtime_metadata() -> None:
@@ -196,5 +244,116 @@ def test_artifact_routes_return_404_when_missing(monkeypatch, tmp_path: Path) ->
     try:
         app_main.artifact_results_md()
         assert False, "expected HTTPException for missing Markdown artifact"
+    except HTTPException as exc:
+        assert exc.status_code == 404
+
+
+def test_analyze_listing_auto_accepts_and_persists_without_review_task(monkeypatch, tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    monkeypatch.setattr(app_main, "review_store", store)
+    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.92)))
+
+    decision = app_main.analyze_listing(
+        ListingInput(title="Lightweight running shoe", description="Black mesh upper size 42")
+    )
+
+    assert decision.listing_id.startswith("lst_")
+    assert decision.decision == "auto_accept"
+    assert decision.risk_level == "low"
+    assert decision.review_task_id is None
+    assert decision.category_set == ["Shoes"]
+    assert [trace.agent for trace in decision.agent_trace] == [
+        "classifier_agent",
+        "attribute_extraction_agent",
+        "semantic_critic_agent",
+        "policy_agent",
+        "human_review_agent",
+    ]
+
+    diagnostics = store.diagnostics()
+    assert diagnostics["listing_count"] == 1
+    assert diagnostics["review_task_count"] == 0
+
+
+def test_analyze_listing_creates_review_task_for_low_confidence(monkeypatch, tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    monkeypatch.setattr(app_main, "review_store", store)
+    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.2)))
+
+    decision = app_main.analyze_listing(
+        ListingInput(title="Ambiguous item", description="Could fit multiple marketplace categories")
+    )
+
+    assert decision.decision == "needs_human_review"
+    assert decision.risk_level == "high"
+    assert decision.review_task_id is not None
+    assert decision.review_task_id.startswith("rev_")
+    assert decision.agent_trace[-1].status == "created"
+    assert decision.agent_trace[-1].reason == "low_confidence"
+
+    queue = app_main.list_review_queue()
+    assert len(queue) == 1
+    assert queue[0].id == decision.review_task_id
+    assert queue[0].status == "pending"
+    assert queue[0].reason == "low_confidence"
+    assert queue[0].title == "Ambiguous item"
+
+
+def test_analyze_listing_creates_review_task_for_low_semantic_consistency(monkeypatch, tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    monkeypatch.setattr(app_main, "review_store", store)
+    monkeypatch.setattr(
+        app_main,
+        "review_graph",
+        StubReviewGraph(_prediction(confidence=0.9, semantic_score=0.1, semantic_status="ok")),
+    )
+
+    decision = app_main.analyze_listing(
+        ListingInput(title="Formal shoe", description="Description appears unrelated to selected category")
+    )
+
+    assert decision.decision == "needs_human_review"
+    assert decision.review_task_id is not None
+    assert store.get_review_task(decision.review_task_id).reason == "low_semantic_consistency"
+
+
+def test_review_queue_decision_endpoint_updates_task(monkeypatch, tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    monkeypatch.setattr(app_main, "review_store", store)
+    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.2)))
+    decision = app_main.analyze_listing(ListingInput(title="Ambiguous item", description="Needs reviewer"))
+    task_id = decision.review_task_id
+
+    updated = app_main.record_review_task_decision(
+        task_id,
+        ReviewDecision(
+            action="correct",
+            corrected_category="Sports",
+            corrected_attributes={"material": "rubber"},
+            notes="Reviewer corrected the category.",
+        ),
+    )
+
+    assert updated.id == task_id
+    assert updated.status == "corrected"
+    assert updated.corrected_category == "Sports"
+    assert updated.corrected_attributes == {"material": "rubber"}
+    assert updated.notes == "Reviewer corrected the category."
+
+    assert app_main.list_review_queue() == []
+
+
+def test_review_queue_missing_task_returns_404(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(app_main, "review_store", SQLiteReviewStore(tmp_path / "uamas.db"))
+
+    try:
+        app_main.get_review_task("rev_missing")
+        assert False, "expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 404
+
+    try:
+        app_main.record_review_task_decision("rev_missing", ReviewDecision(action="reject"))
+        assert False, "expected HTTPException"
     except HTTPException as exc:
         assert exc.status_code == 404
