@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review Queue</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="container review-container">
+    <section class="card dashboard-span">
+      <div class="header-row">
+        <h1>Review Queue</h1>
+        <span class="runtime-badge runtime-{{ diagnostics.runtime_mode|lower }}">{{ diagnostics.runtime_mode }}</span>
+      </div>
+      <p class="subtitle">Pending catalog-quality decisions that need a human check.</p>
+      <div class="actions-row">
+        <a class="link-btn" href="/">Back to Demo</a>
+        <a class="link-btn" href="/dashboard">Dashboard</a>
+        <a class="link-btn" href="/api/review-queue">Queue JSON</a>
+      </div>
+    </section>
+
+    <section class="card dashboard-span">
+      <h2>Queue Summary</h2>
+      <div class="diagnostics-grid">
+        <div><span>Filter</span><strong>{{ status }}</strong></div>
+        <div><span>Shown</span><strong>{{ tasks|length }}</strong></div>
+        <div><span>Pending total</span><strong>{{ diagnostics.pending_review_task_count }}</strong></div>
+        <div><span>All review tasks</span><strong>{{ diagnostics.review_task_count }}</strong></div>
+      </div>
+      <div class="actions-row">
+        <a class="link-btn" href="/review?status=pending">Pending</a>
+        <a class="link-btn" href="/review?status=all">All</a>
+        <a class="link-btn" href="/review?status=approved">Approved</a>
+        <a class="link-btn" href="/review?status=corrected">Corrected</a>
+        <a class="link-btn" href="/review?status=rejected">Rejected</a>
+      </div>
+      {% if error %}
+      <div class="error">{{ error }}</div>
+      {% endif %}
+    </section>
+
+    {% if tasks %}
+      {% for task in tasks %}
+      <section class="card review-task-card">
+        <div class="header-row">
+          <h2>{{ task.title }}</h2>
+          <span class="status-pill status-{{ task.status }}">{{ task.status }}</span>
+        </div>
+        <p class="subtitle">{{ task.description }}</p>
+
+        <div class="diagnostics-grid review-meta-grid">
+          <div><span>Task</span><strong>{{ task.id }}</strong></div>
+          <div><span>Reason</span><strong>{{ task.reason }}</strong></div>
+          <div><span>Risk</span><strong>{{ task.risk_level }}</strong></div>
+          <div><span>Updated</span><strong>{{ task.updated_at }}</strong></div>
+          <div><span>Listing</span><strong>{{ task.listing_id }}</strong></div>
+          <div><span>Prediction</span><strong>{{ task.prediction_id or "None" }}</strong></div>
+        </div>
+
+        {% if task.status == "pending" %}
+        <div class="review-actions">
+          <form method="post" action="/review/{{ task.id }}/decision" class="inline-form">
+            <input type="hidden" name="action" value="approve">
+            <button type="submit">Approve</button>
+          </form>
+
+          <form method="post" action="/review/{{ task.id }}/decision" class="inline-form">
+            <input type="hidden" name="action" value="reject">
+            <button type="submit" class="danger-button">Reject</button>
+          </form>
+        </div>
+
+        <form method="post" action="/review/{{ task.id }}/decision" class="correction-form">
+          <input type="hidden" name="action" value="correct">
+          <label for="corrected-category-{{ task.id }}">Corrected Category</label>
+          <input
+            id="corrected-category-{{ task.id }}"
+            name="corrected_category"
+            type="text"
+            placeholder="e.g., Sports"
+          >
+
+          <label for="corrected-attributes-{{ task.id }}">Corrected Attributes JSON</label>
+          <textarea
+            id="corrected-attributes-{{ task.id }}"
+            name="corrected_attributes_json"
+            rows="4"
+            placeholder='{"brand":"Acme","material":"cotton"}'
+          ></textarea>
+
+          <label for="notes-{{ task.id }}">Reviewer Notes</label>
+          <textarea id="notes-{{ task.id }}" name="notes" rows="3" placeholder="What changed and why?"></textarea>
+
+          <button type="submit">Submit Correction</button>
+        </form>
+        {% else %}
+        <div class="diagnostics-grid review-meta-grid">
+          <div><span>Corrected category</span><strong>{{ task.corrected_category or "None" }}</strong></div>
+          <div><span>Notes</span><strong>{{ task.notes or "None" }}</strong></div>
+        </div>
+        {% endif %}
+      </section>
+      {% endfor %}
+    {% else %}
+    <section class="card dashboard-span">
+      <h2>No Tasks</h2>
+      <p class="placeholder">There are no review tasks for this filter.</p>
+    </section>
+    {% endif %}
+  </main>
+</body>
+</html>

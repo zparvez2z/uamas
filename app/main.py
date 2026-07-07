@@ -4,8 +4,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import FileResponse, HTMLResponse
 from fastapi import HTTPException
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -216,6 +216,18 @@ def load_results_artifact(path: Path = RESULTS_JSON_PATH) -> tuple[dict | None, 
         return None, f"failed to parse {path}: {exc}"
 
 
+def parse_corrected_attributes(raw: str | None) -> dict[str, object]:
+    if raw is None or not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"corrected_attributes_json must be valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=400, detail="corrected_attributes_json must be a JSON object")
+    return parsed
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
@@ -281,6 +293,50 @@ def health() -> dict:
 @app.get("/diagnostics")
 def diagnostics() -> dict:
     return build_diagnostics()
+
+
+@app.get("/review", response_class=HTMLResponse)
+def review_queue_page(request: Request, status: str = "pending", limit: int = 100) -> HTMLResponse:
+    selected_status = None if status == "all" else status
+    try:
+        tasks = review_store.list_review_tasks(status=selected_status, limit=limit)
+        error = None
+    except ValueError as exc:
+        tasks = []
+        error = str(exc)
+    return templates.TemplateResponse(
+        request,
+        "review.html",
+        {
+            "tasks": tasks,
+            "status": status,
+            "limit": limit,
+            "error": error,
+            "diagnostics": build_diagnostics(),
+        },
+    )
+
+
+@app.post("/review/{task_id}/decision")
+def submit_review_task_decision(
+    task_id: str,
+    action: str = Form(...),
+    corrected_category: str = Form(""),
+    corrected_attributes_json: str = Form(""),
+    notes: str = Form(""),
+) -> RedirectResponse:
+    corrected_attributes = parse_corrected_attributes(corrected_attributes_json)
+    decision = ReviewDecision(
+        action=action,
+        corrected_category=corrected_category.strip() or None,
+        corrected_attributes=corrected_attributes,
+        notes=notes.strip() or None,
+    )
+    try:
+        review_store.record_review_decision(task_id, decision)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return RedirectResponse(url="/review", status_code=303)
 
 
 @app.post("/api/listings/analyze", response_model=CatalogQualityDecision)

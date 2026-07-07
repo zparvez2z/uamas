@@ -232,6 +232,69 @@ def test_dashboard_renders_with_missing_artifact(monkeypatch) -> None:
     assert "reports/results.json not found" in response.body.decode("utf-8")
 
 
+def test_review_queue_page_renders_pending_tasks(monkeypatch, tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    monkeypatch.setattr(app_main, "review_store", store)
+    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.2)))
+    decision = app_main.analyze_listing(ListingInput(title="Ambiguous jacket", description="Needs category review"))
+
+    response = app_main.review_queue_page(_build_request("/review"))
+
+    assert response.status_code == 200
+    html = response.body.decode("utf-8")
+    assert "Review Queue" in html
+    assert "Ambiguous jacket" in html
+    assert decision.review_task_id in html
+    assert "Submit Correction" in html
+
+
+def test_review_queue_page_renders_empty_state(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(app_main, "review_store", SQLiteReviewStore(tmp_path / "uamas.db"))
+
+    response = app_main.review_queue_page(_build_request("/review"))
+
+    assert response.status_code == 200
+    assert "No Tasks" in response.body.decode("utf-8")
+
+
+def test_review_queue_form_handler_updates_task_and_redirects(monkeypatch, tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    monkeypatch.setattr(app_main, "review_store", store)
+    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.2)))
+    decision = app_main.analyze_listing(ListingInput(title="Ambiguous racket", description="Could be sports"))
+    task_id = decision.review_task_id
+
+    response = app_main.submit_review_task_decision(
+        task_id,
+        action="correct",
+        corrected_category="Sports",
+        corrected_attributes_json='{"material":"graphite"}',
+        notes="Corrected after reviewer inspection.",
+    )
+
+    updated = store.get_review_task(task_id)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/review"
+    assert updated.status == "corrected"
+    assert updated.corrected_category == "Sports"
+    assert updated.corrected_attributes == {"material": "graphite"}
+    assert updated.notes == "Corrected after reviewer inspection."
+
+
+def test_review_queue_form_handler_rejects_invalid_corrected_attributes_json() -> None:
+    try:
+        app_main.parse_corrected_attributes("[1, 2]")
+        assert False, "expected HTTPException for non-object JSON"
+    except HTTPException as exc:
+        assert exc.status_code == 400
+
+    try:
+        app_main.parse_corrected_attributes("{bad")
+        assert False, "expected HTTPException for invalid JSON"
+    except HTTPException as exc:
+        assert exc.status_code == 400
+
+
 def test_artifact_routes_return_404_when_missing(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(app_main, "RESULTS_JSON_PATH", tmp_path / "missing_results.json")
     monkeypatch.setattr(app_main, "RESULTS_MD_PATH", tmp_path / "missing_results.md")

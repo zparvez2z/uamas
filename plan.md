@@ -135,7 +135,7 @@ Real-data acceptance criteria:
 ### Phase 2: Persistence + Review Queue
 Add a minimal operational data layer first. This is the fastest way to make the system real.
 
-Status: **in progress**. SQLite schema/repository operations are implemented, and the first API workflow now stores analyzed listings, creates review tasks for uncertain predictions, lists pending review tasks, and records approve/correct/reject decisions. The browser-based `/review` UI is the next slice.
+Status: **implemented for the first operational slice**. SQLite schema/repository operations are implemented, the API workflow stores analyzed listings, uncertain predictions create review tasks, pending tasks can be listed, approve/correct/reject decisions are recorded, and the browser-based `/review` page lets a reviewer act on queued tasks.
 
 Use SQLite as the first database backend.
 
@@ -215,7 +215,7 @@ New API endpoints:
 - `GET /api/metrics`
   - returns operational metrics.
 
-Status: **partially implemented**. Listing analysis and review queue JSON endpoints are available. `/api/metrics` and the `/review` browser UI remain pending.
+Status: **partially implemented**. Listing analysis endpoints, review queue JSON endpoints, and the `/review` browser UI are available. `/api/metrics` remains pending.
 
 New UI route:
 - `GET /review`

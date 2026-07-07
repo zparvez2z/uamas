@@ -36,6 +36,10 @@ body {
   grid-template-columns: 1fr 1fr;
 }
 
+.review-container {
+  grid-template-columns: 1fr;
+}
+
 .dashboard-span {
   grid-column: 1 / -1;
 }
@@ -184,6 +188,71 @@ button {
 
 button:hover {
   filter: brightness(1.05);
+}
+
+.danger-button {
+  background: linear-gradient(90deg, #d94848, #ff8a8a);
+}
+
+.review-task-card {
+  grid-column: 1 / -1;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.inline-form {
+  display: inline-block;
+}
+
+.inline-form button {
+  margin-top: 0;
+}
+
+.correction-form {
+  margin-top: 16px;
+}
+
+.review-meta-grid {
+  margin-top: 14px;
+}
+
+.status-pill {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  background: rgba(157, 176, 208, 0.18);
+  border: 1px solid rgba(157, 176, 208, 0.4);
+}
+
+.status-pending {
+  color: #ffe8bf;
+  background: rgba(180, 120, 25, 0.2);
+  border-color: rgba(255, 196, 97, 0.7);
+}
+
+.status-approved {
+  color: #c6ffd8;
+  background: rgba(15, 160, 80, 0.22);
+  border-color: rgba(80, 230, 140, 0.7);
+}
+
+.status-corrected {
+  color: #cde7ff;
+  background: rgba(43, 135, 255, 0.18);
+  border-color: rgba(80, 170, 255, 0.65);
+}
+
+.status-rejected {
+  color: #ffd0d0;
+  background: rgba(180, 45, 45, 0.2);
+  border-color: rgba(255, 120, 120, 0.7);
 }
 
 .output pre {

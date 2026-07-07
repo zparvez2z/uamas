@@ -97,12 +97,14 @@ flowchart LR
 5. When review is needed, the app creates a persisted `pending` review task.
 6. Reviewers can inspect tasks through `GET /api/review-queue` and `GET /api/review-queue/{task_id}`.
 7. Reviewers can record `approve`, `correct`, or `reject` decisions with `POST /api/review-queue/{task_id}/decision`.
+8. Browser users can inspect and resolve pending tasks from `GET /review`, which writes to the same SQLite review store.
 
 ## 5) Files and Responsibilities
 ### `app/main.py`
 - Serves the homepage.
 - Handles `POST /predict`.
 - Exposes `GET /health`, `GET /diagnostics`, and `GET /dashboard`.
+- Exposes `GET /review` and `POST /review/{task_id}/decision` for the browser review queue.
 - Exposes catalog review JSON endpoints:
   - `POST /api/listings/analyze`
   - `GET /api/review-queue`
