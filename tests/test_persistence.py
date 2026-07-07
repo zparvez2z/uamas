@@ -116,6 +116,45 @@ def test_store_diagnostics_counts_review_tasks(tmp_path: Path) -> None:
     assert diagnostics["pending_review_task_count"] == 0
 
 
+def test_store_metrics_counts_statuses_reasons_and_rates(tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    auto_listing_id = store.create_listing(ListingInput(title="accepted shoe", description="clear shoe"))
+    store.create_prediction(auto_listing_id, _prediction())
+
+    pending_listing_id = store.create_listing(ListingInput(title="pending item", description="unclear"))
+    pending_prediction_id = store.create_prediction(pending_listing_id, _prediction())
+    store.create_review_task(
+        listing_id=pending_listing_id,
+        prediction_id=pending_prediction_id,
+        reason="low_confidence",
+    )
+
+    corrected_listing_id = store.create_listing(ListingInput(title="corrected item", description="unclear"))
+    corrected_prediction_id = store.create_prediction(corrected_listing_id, _prediction())
+    corrected_task = store.create_review_task(
+        listing_id=corrected_listing_id,
+        prediction_id=corrected_prediction_id,
+        reason="low_semantic_consistency",
+    )
+    store.record_review_decision(corrected_task.id, ReviewDecision(action="correct", corrected_category="Sports"))
+
+    metrics = store.metrics()
+
+    assert metrics["available"] is True
+    assert metrics["listing_count"] == 3
+    assert metrics["prediction_count"] == 3
+    assert metrics["review_task_count"] == 2
+    assert metrics["auto_accept_count"] == 1
+    assert metrics["needs_human_review_count"] == 2
+    assert metrics["pending_review_task_count"] == 1
+    assert metrics["corrected_review_task_count"] == 1
+    assert metrics["review_status_counts"] == {"corrected": 1, "pending": 1}
+    assert metrics["review_reason_counts"] == {"low_confidence": 1, "low_semantic_consistency": 1}
+    assert metrics["auto_accept_rate"] == 0.333
+    assert metrics["human_review_rate"] == 0.667
+    assert metrics["correction_rate"] == 0.5
+
+
 def test_store_rejects_invalid_limit(tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
 

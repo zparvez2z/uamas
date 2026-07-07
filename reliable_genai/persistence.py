@@ -230,21 +230,74 @@ class SQLiteReviewStore:
             raise KeyError(f"review task not found: {task_id}")
         return task
 
-    def diagnostics(self) -> dict[str, object]:
+    def metrics(self) -> dict[str, object]:
         try:
             with self._connect() as conn:
-                listing_count = conn.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
-                review_task_count = conn.execute("SELECT COUNT(*) FROM review_tasks").fetchone()[0]
-                pending_review_task_count = conn.execute(
-                    "SELECT COUNT(*) FROM review_tasks WHERE status = 'pending'"
-                ).fetchone()[0]
+                listing_count = int(conn.execute("SELECT COUNT(*) FROM listings").fetchone()[0])
+                prediction_count = int(conn.execute("SELECT COUNT(*) FROM predictions").fetchone()[0])
+                review_task_count = int(conn.execute("SELECT COUNT(*) FROM review_tasks").fetchone()[0])
+                status_rows = conn.execute(
+                    "SELECT status, COUNT(*) AS count FROM review_tasks GROUP BY status"
+                ).fetchall()
+                reason_rows = conn.execute(
+                    "SELECT reason, COUNT(*) AS count FROM review_tasks GROUP BY reason"
+                ).fetchall()
+
+            status_counts = {row["status"]: int(row["count"]) for row in status_rows}
+            reason_counts = {row["reason"]: int(row["count"]) for row in reason_rows}
+            auto_accept_count = max(listing_count - review_task_count, 0)
+            needs_human_review_count = review_task_count
+            corrected_count = status_counts.get("corrected", 0)
             return {
                 "available": True,
                 "db_path": str(self.db_path),
-                "listing_count": int(listing_count),
-                "review_task_count": int(review_task_count),
-                "pending_review_task_count": int(pending_review_task_count),
                 "error": None,
+                "listing_count": listing_count,
+                "prediction_count": prediction_count,
+                "review_task_count": review_task_count,
+                "review_status_counts": status_counts,
+                "review_reason_counts": reason_counts,
+                "pending_review_task_count": status_counts.get("pending", 0),
+                "approved_review_task_count": status_counts.get("approved", 0),
+                "corrected_review_task_count": corrected_count,
+                "rejected_review_task_count": status_counts.get("rejected", 0),
+                "auto_accept_count": auto_accept_count,
+                "needs_human_review_count": needs_human_review_count,
+                "auto_accept_rate": round(auto_accept_count / listing_count, 3) if listing_count else 0.0,
+                "human_review_rate": round(needs_human_review_count / listing_count, 3) if listing_count else 0.0,
+                "correction_rate": round(corrected_count / review_task_count, 3) if review_task_count else 0.0,
+            }
+        except Exception as exc:
+            return {
+                "available": False,
+                "db_path": str(self.db_path),
+                "error": str(exc),
+                "listing_count": 0,
+                "prediction_count": 0,
+                "review_task_count": 0,
+                "review_status_counts": {},
+                "review_reason_counts": {},
+                "pending_review_task_count": 0,
+                "approved_review_task_count": 0,
+                "corrected_review_task_count": 0,
+                "rejected_review_task_count": 0,
+                "auto_accept_count": 0,
+                "needs_human_review_count": 0,
+                "auto_accept_rate": 0.0,
+                "human_review_rate": 0.0,
+                "correction_rate": 0.0,
+            }
+
+    def diagnostics(self) -> dict[str, object]:
+        try:
+            metrics = self.metrics()
+            return {
+                "available": metrics["available"],
+                "db_path": metrics["db_path"],
+                "listing_count": metrics["listing_count"],
+                "review_task_count": metrics["review_task_count"],
+                "pending_review_task_count": metrics["pending_review_task_count"],
+                "error": metrics["error"],
             }
         except Exception as exc:
             return {

@@ -216,6 +216,7 @@ def test_dashboard_renders_with_artifact(monkeypatch) -> None:
     html = response.body.decode("utf-8")
     assert "Reliability Dashboard" in html
     assert "Review Queue Storage" in html
+    assert "Operational Metrics" in html
     assert "Trigger Reason Distribution" in html
     assert "Latest Results (JSON)" in html
 
@@ -293,6 +294,37 @@ def test_review_queue_form_handler_rejects_invalid_corrected_attributes_json() -
         assert False, "expected HTTPException for invalid JSON"
     except HTTPException as exc:
         assert exc.status_code == 400
+
+
+def test_api_metrics_reports_operational_counts_and_rates(monkeypatch, tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    monkeypatch.setattr(app_main, "review_store", store)
+    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.92)))
+    app_main.analyze_listing(ListingInput(title="Accepted shoe", description="Clear shoe listing"))
+
+    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.2)))
+    review_decision = app_main.analyze_listing(ListingInput(title="Ambiguous item", description="Needs review"))
+    app_main.record_review_task_decision(
+        review_decision.review_task_id,
+        ReviewDecision(action="correct", corrected_category="Sports"),
+    )
+
+    metrics = app_main.api_metrics()
+
+    assert metrics.status == "ok"
+    assert metrics.persistence_available is True
+    assert metrics.listing_count == 2
+    assert metrics.prediction_count == 2
+    assert metrics.review_task_count == 1
+    assert metrics.auto_accept_count == 1
+    assert metrics.needs_human_review_count == 1
+    assert metrics.auto_accept_rate == 0.5
+    assert metrics.human_review_rate == 0.5
+    assert metrics.correction_rate == 1.0
+    assert metrics.review_status_counts == {"corrected": 1}
+    assert metrics.review_reason_counts == {"low_confidence": 1}
+    assert metrics.llm_runtime_mode in {"MOCK", "LIVE"}
+    assert metrics.classifier_runtime in {"ARTIFACT", "TRAINED", "FALLBACK"}
 
 
 def test_artifact_routes_return_404_when_missing(monkeypatch, tmp_path: Path) -> None:

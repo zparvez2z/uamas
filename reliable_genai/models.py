@@ -99,6 +99,35 @@ class ReviewDecision(BaseModel):
     notes: Optional[str] = None
 
 
+class OperationalMetrics(BaseModel):
+    status: str = "ok"
+    persistence_available: bool
+    persistence_db_path: str
+    persistence_error: Optional[str] = None
+    listing_count: int
+    prediction_count: int
+    review_task_count: int
+    pending_review_task_count: int
+    approved_review_task_count: int
+    corrected_review_task_count: int
+    rejected_review_task_count: int
+    review_status_counts: Dict[str, int] = Field(default_factory=dict)
+    review_reason_counts: Dict[str, int] = Field(default_factory=dict)
+    auto_accept_count: int
+    needs_human_review_count: int
+    auto_accept_rate: float
+    human_review_rate: float
+    correction_rate: float
+    semantic_degraded_rate: float
+    semantic_degraded_requests: int
+    llm_runtime_mode: str
+    llm_last_runtime: str
+    llm_last_error: Optional[str] = None
+    classifier_runtime: str
+    review_graph_trigger_rate: Optional[float] = None
+    review_graph_second_pass_rate: Optional[float] = None
+
+
 class LLMExtraction(BaseModel):
     attributes: ProductAttributes
     notes: Optional[str] = None

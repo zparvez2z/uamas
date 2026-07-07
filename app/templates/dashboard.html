@@ -57,6 +57,22 @@
     </section>
 
     <section class="card dashboard-span">
+      <h2>Operational Metrics</h2>
+      <div class="diagnostics-grid">
+        <div><span>Auto-accepted</span><strong>{{ metrics.auto_accept_count }}</strong></div>
+        <div><span>Needs review</span><strong>{{ metrics.needs_human_review_count }}</strong></div>
+        <div><span>Auto-accept rate</span><strong>{{ metrics.auto_accept_rate }}</strong></div>
+        <div><span>Human-review rate</span><strong>{{ metrics.human_review_rate }}</strong></div>
+        <div><span>Correction rate</span><strong>{{ metrics.correction_rate }}</strong></div>
+        <div><span>Predictions stored</span><strong>{{ metrics.prediction_count }}</strong></div>
+        <div><span>Approved</span><strong>{{ metrics.approved_review_task_count }}</strong></div>
+        <div><span>Corrected</span><strong>{{ metrics.corrected_review_task_count }}</strong></div>
+        <div><span>Rejected</span><strong>{{ metrics.rejected_review_task_count }}</strong></div>
+        <div><span>Semantic degraded rate</span><strong>{{ metrics.semantic_degraded_rate }}</strong></div>
+      </div>
+    </section>
+
+    <section class="card dashboard-span">
       <h2>Review Trigger Telemetry</h2>
       <div class="diagnostics-grid">
         <div><span>Trigger rate</span><strong>{{ diagnostics.review_graph_trigger_rate }}</strong></div>
@@ -96,6 +112,7 @@
       <h2>Evidence Links</h2>
       <div class="actions-row">
         <a class="link-btn" href="/diagnostics">Live Diagnostics JSON</a>
+        <a class="link-btn" href="/api/metrics">Operational Metrics JSON</a>
         <a class="link-btn" href="/artifacts/results.md">Latest Results (Markdown)</a>
         <a class="link-btn" href="/artifacts/results.json">Latest Results (JSON)</a>
       </div>

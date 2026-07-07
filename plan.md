@@ -215,7 +215,7 @@ New API endpoints:
 - `GET /api/metrics`
   - returns operational metrics.
 
-Status: **partially implemented**. Listing analysis endpoints, review queue JSON endpoints, and the `/review` browser UI are available. `/api/metrics` remains pending.
+Status: **implemented for the current product slice**. Listing analysis endpoints, review queue JSON endpoints, the `/review` browser UI, and `/api/metrics` operational metrics are available.
 
 New UI route:
 - `GET /review`

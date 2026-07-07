@@ -13,6 +13,7 @@ from reliable_genai.models import (
     AgentTrace,
     CatalogQualityDecision,
     ListingInput,
+    OperationalMetrics,
     ProductInput,
     PredictionResponse,
     ReviewDecision,
@@ -206,6 +207,45 @@ def build_diagnostics() -> dict:
     }
 
 
+def build_operational_metrics() -> OperationalMetrics:
+    persistence_metrics = review_store.metrics()
+    semantic_scorer = getattr(pipeline, "semantic_scorer", None)
+    semantic_diagnostics = (
+        semantic_scorer.diagnostics()
+        if semantic_scorer is not None and hasattr(semantic_scorer, "diagnostics")
+        else {"degraded_rate": 0.0, "degraded_requests": 0}
+    )
+    review_diagnostics = review_graph.diagnostics()
+    return OperationalMetrics(
+        status="ok" if persistence_metrics["available"] else "degraded",
+        persistence_available=bool(persistence_metrics["available"]),
+        persistence_db_path=str(persistence_metrics["db_path"]),
+        persistence_error=persistence_metrics.get("error"),
+        listing_count=int(persistence_metrics["listing_count"]),
+        prediction_count=int(persistence_metrics["prediction_count"]),
+        review_task_count=int(persistence_metrics["review_task_count"]),
+        pending_review_task_count=int(persistence_metrics["pending_review_task_count"]),
+        approved_review_task_count=int(persistence_metrics["approved_review_task_count"]),
+        corrected_review_task_count=int(persistence_metrics["corrected_review_task_count"]),
+        rejected_review_task_count=int(persistence_metrics["rejected_review_task_count"]),
+        review_status_counts=dict(persistence_metrics["review_status_counts"]),
+        review_reason_counts=dict(persistence_metrics["review_reason_counts"]),
+        auto_accept_count=int(persistence_metrics["auto_accept_count"]),
+        needs_human_review_count=int(persistence_metrics["needs_human_review_count"]),
+        auto_accept_rate=float(persistence_metrics["auto_accept_rate"]),
+        human_review_rate=float(persistence_metrics["human_review_rate"]),
+        correction_rate=float(persistence_metrics["correction_rate"]),
+        semantic_degraded_rate=float(semantic_diagnostics.get("degraded_rate", 0.0)),
+        semantic_degraded_requests=int(semantic_diagnostics.get("degraded_requests", 0)),
+        llm_runtime_mode="MOCK" if pipeline.llm.use_mock else "LIVE",
+        llm_last_runtime=pipeline.llm.last_runtime,
+        llm_last_error=pipeline.llm.last_error,
+        classifier_runtime=str(pipeline.classifier.diagnostics().get("runtime")),
+        review_graph_trigger_rate=review_diagnostics.get("review_graph_trigger_rate"),
+        review_graph_second_pass_rate=review_diagnostics.get("review_graph_second_pass_rate"),
+    )
+
+
 def load_results_artifact(path: Path = RESULTS_JSON_PATH) -> tuple[dict | None, str | None]:
     if not path.exists():
         return None, f"{path} not found"
@@ -293,6 +333,11 @@ def health() -> dict:
 @app.get("/diagnostics")
 def diagnostics() -> dict:
     return build_diagnostics()
+
+
+@app.get("/api/metrics", response_model=OperationalMetrics)
+def api_metrics() -> OperationalMetrics:
+    return build_operational_metrics()
 
 
 @app.get("/review", response_class=HTMLResponse)
@@ -403,12 +448,14 @@ def record_review_task_decision(task_id: str, decision: ReviewDecision) -> Revie
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request) -> HTMLResponse:
     diagnostics_payload = build_diagnostics()
+    metrics_payload = build_operational_metrics()
     artifact, artifact_error = load_results_artifact()
     return templates.TemplateResponse(
         request,
         "dashboard.html",
         {
             "diagnostics": diagnostics_payload,
+            "metrics": metrics_payload,
             "artifact": artifact,
             "artifact_error": artifact_error,
         },

@@ -98,6 +98,7 @@ flowchart LR
 6. Reviewers can inspect tasks through `GET /api/review-queue` and `GET /api/review-queue/{task_id}`.
 7. Reviewers can record `approve`, `correct`, or `reject` decisions with `POST /api/review-queue/{task_id}/decision`.
 8. Browser users can inspect and resolve pending tasks from `GET /review`, which writes to the same SQLite review store.
+9. `GET /api/metrics` returns operational queue metrics, decision rates, semantic degraded rate, and runtime state for dashboards or automation.
 
 ## 5) Files and Responsibilities
 ### `app/main.py`
@@ -110,6 +111,7 @@ flowchart LR
   - `GET /api/review-queue`
   - `GET /api/review-queue/{task_id}`
   - `POST /api/review-queue/{task_id}/decision`
+  - `GET /api/metrics`
 - Passes runtime metadata and diagnostics into the Jinja template context.
 - Initializes the SQLite review store used by the next review-queue workflow slice.
 
@@ -170,6 +172,7 @@ flowchart LR
 - Creates the SQLite schema on startup.
 - Stores submitted listings, prediction payloads, and review tasks.
 - Supports review task listing and approve/correct/reject state transitions.
+- Aggregates operational metrics such as status counts, reason counts, auto-accept rate, human-review rate, and correction rate.
 - Reports persistence diagnostics for the dashboard and `/diagnostics`.
 - Defaults to `data/uamas.db` and supports `UAMAS_DB_PATH` override.
 
