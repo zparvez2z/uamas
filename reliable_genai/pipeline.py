@@ -1,12 +1,35 @@
 import os
-from typing import Dict, List
+from dataclasses import dataclass
+from typing import Any, Dict, List
 
 from .classifier import CalibratedTextClassifier
 from .llm_wrappers import GitHubModelsClient
-from .models import ClassifierResult, PredictionResponse, ProductInput, ReliabilityMeta
+from .models import (
+    ClassifierResult,
+    PredictionResponse,
+    ProductAttributes,
+    ProductInput,
+    ReliabilityMeta,
+)
 from .runtime_profile import resolve_runtime_settings
-from .semantic_scorer import SemanticConsistencyScorer
-from .scoring import apply_abstention_policy, build_prediction_set
+from .semantic_scorer import SemanticConsistencyResult, SemanticConsistencyScorer
+from .scoring import PolicyDecision, apply_abstention_policy, build_prediction_set
+
+
+@dataclass(frozen=True)
+class ClassificationStageResult:
+    classifier_result: ClassifierResult
+    candidate_category_set: list[str]
+    policy: PolicyDecision
+    diagnostics: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class AttributeExtractionStageResult:
+    attributes: ProductAttributes
+    runtime: str
+    model: str
+    error: str | None
 
 
 class ReliabilityPipeline:
@@ -60,17 +83,60 @@ class ReliabilityPipeline:
         )
 
     def predict(self, item: ProductInput) -> PredictionResponse:
+        classification = self.classify(item)
+        semantic = self.score_semantic(
+            item,
+            candidate_labels=classification.candidate_category_set,
+        )
+        extraction = self.extract_attributes(item)
+        return self.assemble_prediction(
+            classification=classification,
+            extraction=extraction,
+            semantic=semantic,
+        )
+
+    def classify(self, item: ProductInput) -> ClassificationStageResult:
         classifier_result = self._classify(item)
         category_set = self._conformal_set(classifier_result)
-        classifier_diagnostics = self.classifier.diagnostics()
         policy = apply_abstention_policy(
             category_set=category_set,
             max_set_size=self.max_set_size,
             enable_abstain=self.enable_abstain,
         )
-        semantic = self.semantic_scorer.score(item, candidate_labels=category_set)
+        return ClassificationStageResult(
+            classifier_result=classifier_result,
+            candidate_category_set=category_set,
+            policy=policy,
+            diagnostics=self.classifier.diagnostics(),
+        )
 
+    def extract_attributes(self, item: ProductInput) -> AttributeExtractionStageResult:
         attributes = self.llm.extract_attributes(item.title, item.description)
+        return AttributeExtractionStageResult(
+            attributes=attributes,
+            runtime=self.llm.last_runtime,
+            model=self.llm.model,
+            error=self.llm.last_error,
+        )
+
+    def score_semantic(
+        self,
+        item: ProductInput,
+        *,
+        candidate_labels: list[str],
+    ) -> SemanticConsistencyResult:
+        return self.semantic_scorer.score(item, candidate_labels=candidate_labels)
+
+    def assemble_prediction(
+        self,
+        *,
+        classification: ClassificationStageResult,
+        extraction: AttributeExtractionStageResult,
+        semantic: SemanticConsistencyResult,
+    ) -> PredictionResponse:
+        classifier_result = classification.classifier_result
+        policy = classification.policy
+        classifier_diagnostics = classification.diagnostics
 
         reliability = ReliabilityMeta(
             alpha=self.alpha,
@@ -80,8 +146,8 @@ class ReliabilityPipeline:
             abstained=policy.abstained,
             reason=policy.reason,
             policy_action=policy.action,
-            llm_runtime=self.llm.last_runtime,
-            llm_model=self.llm.model,
+            llm_runtime=extraction.runtime,
+            llm_model=extraction.model,
             classifier_runtime=str(classifier_diagnostics["runtime"]),
             classifier_reason=classifier_diagnostics["reason"],
             classifier_artifact_path=classifier_diagnostics["artifact_path"],
@@ -102,7 +168,7 @@ class ReliabilityPipeline:
 
         return PredictionResponse(
             category_set=policy.category_set,
-            attributes=attributes,
+            attributes=extraction.attributes,
             reliability=reliability,
         )
 

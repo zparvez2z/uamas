@@ -238,6 +238,8 @@ class ReviewGraphRunner:
         return graph
 
     def _node_first_pass(self, state: ReviewGraphState) -> ReviewGraphState:
+        if "first_response" in state:
+            return {"first_response": state["first_response"]}
         return {"first_response": self.pipeline.predict(state["item"])}
 
     def _compute_trigger_reason(self, first: PredictionResponse, context: ReviewGraphContext) -> str | None:
@@ -342,8 +344,13 @@ class ReviewGraphRunner:
             "review_outcome": outcome,
         }
 
-    def _sequential_predict(self, item: ProductInput, context: ReviewGraphContext) -> PredictionResponse:
-        first = self.pipeline.predict(item)
+    def _sequential_predict(
+        self,
+        item: ProductInput,
+        context: ReviewGraphContext,
+        first_response: PredictionResponse | None = None,
+    ) -> PredictionResponse:
+        first = first_response or self.pipeline.predict(item)
         trigger_reason = self._compute_trigger_reason(first, context)
 
         if trigger_reason is None:
@@ -377,14 +384,15 @@ class ReviewGraphRunner:
         final.reliability.review_outcome = outcome
         return final
 
-    def predict(
+    def _run(
         self,
         item: ProductInput,
-        context: ReviewGraphContext | dict[str, Any] | None = None,
+        cfg: ReviewGraphContext,
+        *,
+        first_response: PredictionResponse | None,
     ) -> PredictionResponse:
-        cfg = self._resolve_context(context)
         if not cfg.enabled:
-            response = self.pipeline.predict(item)
+            response = (first_response or self.pipeline.predict(item)).model_copy(deep=True)
             response.reliability.review_graph_used = False
             response.reliability.review_trigger_reason = None
             response.reliability.review_outcome = "disabled"
@@ -393,7 +401,7 @@ class ReviewGraphRunner:
         self._stats["enabled_requests"] += 1
         graph = self._get_compiled_graph(cfg.cache_ttl_seconds)
         if graph is None:
-            response = self._sequential_predict(item, cfg)
+            response = self._sequential_predict(item, cfg, first_response)
             if response.reliability.review_trigger_reason:
                 self._stats["triggered_requests"] += 1
                 self._stats["second_pass_requests"] += 1
@@ -401,7 +409,10 @@ class ReviewGraphRunner:
                     self._stats["semantic_triggered_requests"] += 1
             return response
 
-        updates = list(graph.stream({"item": item}, context=cfg, stream_mode="updates"))
+        graph_input: ReviewGraphState = {"item": item}
+        if first_response is not None:
+            graph_input["first_response"] = first_response
+        updates = list(graph.stream(graph_input, context=cfg, stream_mode="updates"))
         if any("second_pass" in update for update in updates):
             self._stats["second_pass_requests"] += 1
 
@@ -415,7 +426,7 @@ class ReviewGraphRunner:
                 final_response = finalize_update["final_response"]
 
         if final_response is None:
-            state = graph.invoke({"item": item}, context=cfg)
+            state = graph.invoke(graph_input, context=cfg)
             final_response = state["final_response"]
 
         if final_response.reliability.review_trigger_reason:
@@ -424,6 +435,30 @@ class ReviewGraphRunner:
                 self._stats["semantic_triggered_requests"] += 1
 
         return final_response
+
+    def predict(
+        self,
+        item: ProductInput,
+        context: ReviewGraphContext | dict[str, Any] | None = None,
+    ) -> PredictionResponse:
+        return self._run(
+            item,
+            self._resolve_context(context),
+            first_response=None,
+        )
+
+    def review_first_pass(
+        self,
+        item: ProductInput,
+        first_response: PredictionResponse,
+        context: ReviewGraphContext | dict[str, Any] | None = None,
+    ) -> PredictionResponse:
+        """Apply the optional review gate to an already-computed first pass."""
+        return self._run(
+            item,
+            self._resolve_context(context),
+            first_response=first_response,
+        )
 
     def diagnostics(self) -> dict[str, Any]:
         enabled_requests = self._stats["enabled_requests"]

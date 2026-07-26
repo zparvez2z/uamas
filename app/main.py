@@ -9,13 +9,12 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from reliable_genai.catalog_quality_graph import CatalogQualityGraph
 from reliable_genai.models import (
-    AgentTrace,
     CatalogQualityDecision,
     ListingInput,
     OperationalMetrics,
     ProductInput,
-    PredictionResponse,
     ReviewDecision,
     ReviewQueueItem,
     ReviewTask,
@@ -33,107 +32,13 @@ templates = Jinja2Templates(directory="app/templates")
 pipeline = ReliabilityPipeline()
 review_graph = ReviewGraphRunner(pipeline)
 review_store = SQLiteReviewStore()
+catalog_quality_graph = CatalogQualityGraph(pipeline, review_graph, review_store)
 RESULTS_JSON_PATH = Path("reports/results.json")
 RESULTS_MD_PATH = Path("reports/results.md")
 
 
-def review_confidence_threshold() -> float:
-    return float(os.getenv("REVIEW_CONFIDENCE_THRESHOLD", "0.55"))
-
-
-def semantic_consistency_threshold() -> float:
-    diagnostics_payload = review_graph.diagnostics()
-    threshold = diagnostics_payload.get("semantic_threshold")
-    if threshold is not None:
-        return float(threshold)
-    return float(os.getenv("SEMANTIC_CONSISTENCY_THRESHOLD", "0.4"))
-
-
-def review_decision_for_prediction(prediction: PredictionResponse) -> tuple[str, str, str | None, str]:
-    reliability = prediction.reliability
-    semantic_score = reliability.semantic_consistency_score
-    semantic_threshold = semantic_consistency_threshold()
-
-    if reliability.abstained or not prediction.category_set:
-        reason = reliability.reason or reliability.review_trigger_reason or "abstained"
-        return "needs_human_review", "high", reason, "Classifier abstained or returned no category set."
-
-    max_auto_accept_set_size = int(os.getenv("MAX_AUTO_ACCEPT_SET_SIZE", str(pipeline.max_set_size)))
-    if len(prediction.category_set) > max_auto_accept_set_size:
-        return "needs_human_review", "high", "large_set", "Category set is too large for automatic acceptance."
-
-    if reliability.confidence < review_confidence_threshold():
-        return "needs_human_review", "high", "low_confidence", "Classifier confidence is below review threshold."
-
-    if (
-        reliability.semantic_consistency_status == "ok"
-        and semantic_score is not None
-        and semantic_score < semantic_threshold
-    ):
-        return (
-            "needs_human_review",
-            "high",
-            "low_semantic_consistency",
-            "Semantic consistency score is below review threshold.",
-        )
-
-    risk_level = "low" if len(prediction.category_set) == 1 else "medium"
-    return "auto_accept", risk_level, None, "Listing passed automatic catalog quality checks."
-
-
-def build_agent_trace(
-    prediction: PredictionResponse,
-    *,
-    decision: str,
-    risk_level: str,
-    review_reason: str | None,
-    review_task_id: str | None,
-) -> list[AgentTrace]:
-    reliability = prediction.reliability
-    semantic_threshold = semantic_consistency_threshold()
-    return [
-        AgentTrace(
-            agent="classifier_agent",
-            status="ok",
-            output={
-                "category_set": prediction.category_set,
-                "confidence": reliability.confidence,
-                "set_size": len(prediction.category_set),
-                "abstained": reliability.abstained,
-            },
-            reason=reliability.reason,
-        ),
-        AgentTrace(
-            agent="attribute_extraction_agent",
-            status="ok",
-            output=prediction.attributes.model_dump(),
-            reason=None,
-        ),
-        AgentTrace(
-            agent="semantic_critic_agent",
-            status=reliability.semantic_consistency_status,
-            output={
-                "score": reliability.semantic_consistency_score,
-                "threshold": semantic_threshold,
-            },
-            reason=reliability.semantic_consistency_reason,
-        ),
-        AgentTrace(
-            agent="policy_agent",
-            status="ok",
-            output={
-                "decision": decision,
-                "risk_level": risk_level,
-            },
-            reason=review_reason,
-        ),
-        AgentTrace(
-            agent="human_review_agent",
-            status="created" if review_task_id else "skipped",
-            output={"review_task_id": review_task_id},
-            reason=review_reason,
-        ),
-    ]
+def current_catalog_quality_graph() -> CatalogQualityGraph:
+    return catalog_quality_graph
 
 
 def build_diagnostics() -> dict:
@@ -152,6 +57,7 @@ def build_diagnostics() -> dict:
             "degraded_requests": 0,
         }
     review_diagnostics = review_graph.diagnostics()
+    catalog_graph_diagnostics = current_catalog_quality_graph().diagnostics()
     persistence_diagnostics = review_store.diagnostics()
     artifact_metadata = classifier_diagnostics.get("artifact_metadata", {}) or {}
     return {
@@ -192,6 +98,9 @@ def build_diagnostics() -> dict:
         "review_graph_semantic_trigger_rate": review_diagnostics.get("review_graph_semantic_trigger_rate"),
         "review_graph_cache_hit_rate": review_diagnostics.get("review_graph_cache_hit_rate"),
         "review_graph_cached_step_count": review_diagnostics.get("review_graph_cached_step_count"),
+        "catalog_quality_graph_available": catalog_graph_diagnostics.get("available"),
+        "catalog_quality_graph_backend": catalog_graph_diagnostics.get("backend"),
+        "catalog_quality_graph_reason": catalog_graph_diagnostics.get("reason"),
         "semantic_scorer_enabled": semantic_diagnostics.get("enabled"),
         "semantic_scorer_client_available": semantic_diagnostics.get("client_available"),
         "semantic_scorer_threshold": semantic_diagnostics.get("threshold"),
@@ -386,39 +295,7 @@ def submit_review_task_decision(
 
 @app.post("/api/listings/analyze", response_model=CatalogQualityDecision)
 def analyze_listing(listing: ListingInput) -> CatalogQualityDecision:
-    payload = ProductInput(title=listing.title, description=listing.description)
-    prediction = review_graph.predict(payload)
-    listing_id = review_store.create_listing(listing)
-    prediction_id = review_store.create_prediction(listing_id, prediction)
-    decision, risk_level, review_reason, explanation = review_decision_for_prediction(prediction)
-
-    review_task_id = None
-    if decision == "needs_human_review":
-        task = review_store.create_review_task(
-            listing_id=listing_id,
-            prediction_id=prediction_id,
-            reason=review_reason or "needs_human_review",
-            risk_level=risk_level,
-        )
-        review_task_id = task.id
-
-    return CatalogQualityDecision(
-        listing_id=listing_id,
-        decision=decision,
-        risk_level=risk_level,
-        explanation=explanation,
-        category_set=prediction.category_set,
-        attributes=prediction.attributes,
-        reliability=prediction.reliability,
-        agent_trace=build_agent_trace(
-            prediction,
-            decision=decision,
-            risk_level=risk_level,
-            review_reason=review_reason,
-            review_task_id=review_task_id,
-        ),
-        review_task_id=review_task_id,
-    )
+    return current_catalog_quality_graph().analyze(listing)
 
 
 @app.get("/api/review-queue", response_model=list[ReviewQueueItem])

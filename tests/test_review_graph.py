@@ -85,6 +85,22 @@ def test_review_graph_disabled_keeps_single_pass() -> None:
     assert response.reliability.review_outcome == "disabled"
 
 
+def test_review_graph_accepts_precomputed_first_pass_without_duplicate_prediction() -> None:
+    first = build_response(confidence=0.9, set_size=1)
+    pipeline = StubPipeline([build_response(confidence=0.1, set_size=1)])
+    runner = ReviewGraphRunner(pipeline, enabled=False)
+
+    response = runner.review_first_pass(
+        ProductInput(title="product", description="desc"),
+        first,
+    )
+
+    assert pipeline.predict_calls == 0
+    assert pipeline.classify_calls == 0
+    assert response.reliability.confidence == 0.9
+    assert response.reliability.review_outcome == "disabled"
+
+
 def test_review_graph_enabled_not_triggered_keeps_first_pass() -> None:
     pipeline = StubPipeline([build_response(confidence=0.9, set_size=1)])
     runner = ReviewGraphRunner(

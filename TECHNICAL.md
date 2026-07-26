@@ -29,26 +29,27 @@ The attribute extraction path uses GitHub Models via Azure AI Inference and vali
 ## 3) Architecture
 ```mermaid
 flowchart LR
-  U[Browser Client] --> UI[FastAPI Web UI\napp/main.py + templates]
-  UI --> RG[ReviewGraphRunner\nreliable_genai/review_graph.py]
-  RG --> P[ReliabilityPipeline\nreliable_genai/pipeline.py]
-  UI --> D[Diagnostics Endpoint\nGET /diagnostics]
-  UI --> DB[(SQLite Review Store\ndata/uamas.db)]
+  U[Browser or API Client] --> API[FastAPI\napp/main.py]
+  API -->|POST /predict| RG[ReviewGraphRunner]
+  API -->|POST /api/listings/analyze| CQG[CatalogQualityGraph]
 
-  P --> C[Embedding-first Classifier\nHashing+SVD+LogReg]
-  P --> S[Calibrated Set Builder\nalpha / max set size]
-  P --> SC[Semantic Consistency Scorer\nEmbedding similarity]
-  P --> L[GitHub Models Client\nazure-ai-inference]
-  C -. optional .-> C2[TF-IDF classifier mode]
+  CQG --> CA[Classifier Agent]
+  CQG --> EA[Attribute Extraction Agent]
+  CA --> SCA[Semantic Critic Agent]
+  EA --> PA[Policy Agent]
+  SCA --> PA
+  PA -->|auto accept| DA[Decision Agent]
+  PA -->|needs review| HRA[Human Review Agent]
+  HRA --> DA
 
-  C --> M[Category Set]
-  S --> R[Reliability Metadata]
-  SC --> R
-  L --> A[Structured Attribute Extraction\nPydantic schema]
-
-  A --> O[Rendered Result\nHTML response]
-  M --> O
-  R --> O
+  CA --> P[ReliabilityPipeline Stages]
+  EA --> P
+  SCA --> P
+  RG --> P
+  HRA --> DB[(SQLite Review Store)]
+  CQG --> DB
+  DA --> O[CatalogQualityDecision]
+  API --> D[Diagnostics / Metrics / Dashboard]
   DB --> D
 
   subgraph Config[Environment / Runtime Configuration]
@@ -63,16 +64,18 @@ flowchart LR
   end
 
   Config --> RG
+  Config --> CQG
   Config --> P
-  Config --> L
-  Config --> UI
+  Config --> API
   Config --> DB
 ```
 
 ### Runtime components
 - `app/main.py` provides the web UI and endpoints.
+- `reliable_genai/catalog_quality_graph.py` coordinates specialist agents, conditional human-review routing, persistence, and final decision assembly.
+- `reliable_genai/agents/` contains the independently testable catalog agent implementations.
 - `reliable_genai/review_graph.py` optionally orchestrates second-pass review through LangGraph when enabled.
-- `reliable_genai/pipeline.py` implements the classification, set construction, and response assembly logic.
+- `reliable_genai/pipeline.py` exposes reusable classification, extraction, semantic-scoring, and response-assembly stages while preserving `predict()`.
 - `reliable_genai/llm_wrappers.py` handles GitHub Models access, mock mode, and fallback extraction.
 - `reliable_genai/persistence.py` owns SQLite schema creation and repository operations for listings, predictions, and review tasks.
 - `reliable_genai/runtime_profile.py` resolves classifier-critical runtime defaults and precedence.
@@ -91,14 +94,14 @@ flowchart LR
 
 ### Catalog review API flow
 1. A caller submits title/description to `POST /api/listings/analyze`.
-2. The app runs the existing `ReviewGraphRunner` prediction path.
-3. The listing and prediction payload are persisted to SQLite.
-4. A simple policy maps the reliability metadata to `auto_accept` or `needs_human_review`.
-5. When review is needed, the app creates a persisted `pending` review task.
-6. Reviewers can inspect tasks through `GET /api/review-queue` and `GET /api/review-queue/{task_id}`.
-7. Reviewers can record `approve`, `correct`, or `reject` decisions with `POST /api/review-queue/{task_id}/decision`.
-8. Browser users can inspect and resolve pending tasks from `GET /review`, which writes to the same SQLite review store.
-9. `GET /api/metrics` returns operational queue metrics, decision rates, semantic degraded rate, and runtime state for dashboards or automation.
+2. `CatalogQualityGraph` starts classifier and attribute-extraction agents as independent branches.
+3. The semantic critic evaluates the classifier candidate set while extraction completes independently.
+4. The pipeline assembles one `PredictionResponse`; the optional `ReviewGraphRunner` gate can inspect that precomputed first pass without duplicating it.
+5. The listing and selected prediction are persisted to SQLite.
+6. The deterministic policy agent maps reliability evidence to `auto_accept` or `needs_human_review`.
+7. When review is needed, the human-review agent creates a persisted `pending` task.
+8. The decision agent returns `CatalogQualityDecision` with ordered execution traces.
+9. Reviewers inspect and resolve tasks through the JSON API or `/review`; `/api/metrics` exposes operational outcomes.
 
 ## 5) Files and Responsibilities
 ### `app/main.py`

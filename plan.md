@@ -16,8 +16,8 @@ Current state:
 - Optional LangGraph review flow exists.
 - Dashboard, diagnostics, deterministic evaluation artifacts, CI, and live smoke are in place.
 - Real Shopify product data is ingested into deterministic processed train/calibration/test splits.
-- SQLite persistence foundation is being added for listings, predictions, and review tasks.
-- True multi-agent behavior is not yet implemented; current graph is orchestration around one reliability pipeline.
+- SQLite persistence is implemented for listings, predictions, and review tasks.
+- `CatalogQualityGraph` coordinates explicit classifier, extraction, semantic critic, policy, human-review, and decision agents.
 
 Target state:
 - UAMAS becomes a real multi-agent workflow with persistence, human review, API endpoints, operational metrics, and feedback-based improvement.
@@ -199,6 +199,13 @@ reliable_genai/catalog_quality_graph.py
 
 The existing `ReviewGraphRunner` can remain during transition, but the product-grade orchestration should move toward the catalog quality graph.
 
+Status: **implemented for the first explicit multi-agent slice**. `POST /api/listings/analyze` now runs through `CatalogQualityGraph`; classifier and attribute extraction execute as independent branches, semantic criticism depends on classifier candidates, policy routing conditionally creates human-review work, and the decision agent assembles the existing response contract. The graph falls back to equivalent sequential execution when LangGraph is unavailable. `/predict` remains backward compatible through `ReviewGraphRunner`.
+
+Deferred from this slice:
+- activating `reject_or_request_clarification` policy rules,
+- durable `workflow_runs` and per-agent execution history,
+- async provider clients and distributed execution.
+
 ### Phase 4: API + UI
 Add first-class API endpoints while keeping the existing web UI.
 
@@ -312,15 +319,15 @@ Default `PolicyAgent` rules:
 
 - `needs_human_review` if classifier abstained.
 - `needs_human_review` if category set size exceeds configured max.
+- `needs_human_review` if classifier confidence is below the review threshold.
 - `needs_human_review` if semantic status is `ok` and semantic score is below threshold.
-- `needs_human_review` if semantic status is `degraded` and classifier confidence is below review threshold.
-- `reject_or_request_clarification` if title is empty or listing is structurally invalid.
+- semantic status `degraded` or `disabled` does not independently trigger review.
+- `reject_or_request_clarification` remains a reserved contract value until explicit rejection criteria are evaluated.
 - `auto_accept` only if:
   - no abstention,
   - category set is within allowed size,
   - confidence is above threshold,
-  - semantic scorer is ok or not required by config,
-  - extracted attributes pass schema validation.
+  - no available semantic score is below threshold.
 
 Default risk levels:
 - `low`: auto-accepted, high confidence, semantic ok.

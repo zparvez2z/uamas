@@ -1,11 +1,13 @@
-# Reliable GenAI Demo
+# UAMAS Catalog Quality Assistant
 
-This project is a small end-to-end demo for uncertainty-aware product classification and attribute extraction.
+UAMAS is an uncertainty-aware multi-agent assistant for product catalog quality.
 
-You enter a product title and description, and the app returns:
+You submit a product title and description, and specialized agents coordinate to return:
 - a category prediction set,
 - extracted attributes,
-- and reliability metadata (confidence, abstention behavior, runtime source).
+- semantic consistency evidence,
+- reliability metadata,
+- and either an automatic acceptance decision or a human-review task.
 
 For implementation details, runtime knobs, diagnostics fields, CI workflows, and architecture, see [TECHNICAL.md](TECHNICAL.md).
 

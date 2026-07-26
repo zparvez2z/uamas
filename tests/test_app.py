@@ -5,10 +5,21 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from app import main as app_main
+from reliable_genai.catalog_quality_graph import CatalogQualityGraph
 from reliable_genai.classifier import CalibratedTextClassifier
-from reliable_genai.models import ListingInput, PredictionResponse, ProductAttributes, ReliabilityMeta, ReviewDecision
+from reliable_genai.models import (
+    ClassifierResult,
+    ListingInput,
+    PredictionResponse,
+    ProductAttributes,
+    ReliabilityMeta,
+    ReviewDecision,
+)
 from reliable_genai.persistence import SQLiteReviewStore
+from reliable_genai.pipeline import AttributeExtractionStageResult, ClassificationStageResult
 from reliable_genai.review_graph import ReviewGraphRunner
+from reliable_genai.scoring import PolicyDecision
+from reliable_genai.semantic_scorer import SemanticConsistencyResult
 
 
 def _write_rows(path: Path, rows: list[dict[str, str]]) -> None:
@@ -60,9 +71,89 @@ class StubReviewGraph:
     def predict(self, payload):
         return self.prediction
 
+    def review_first_pass(self, payload, first_response):
+        return self.prediction
+
     @staticmethod
     def diagnostics() -> dict:
         return {"semantic_threshold": 0.4}
+
+
+class StubCatalogPipeline:
+    alpha = 0.1
+    max_set_size = 3
+
+    def __init__(self, prediction: PredictionResponse) -> None:
+        self.prediction = prediction
+
+    def classify(self, payload) -> ClassificationStageResult:
+        confidence = self.prediction.reliability.confidence
+        category_set = self.prediction.category_set
+        other_probability = max(0.0, 1.0 - confidence) / 5
+        return ClassificationStageResult(
+            classifier_result=ClassifierResult(
+                probabilities={
+                    "Shoes": confidence,
+                    "Sports": other_probability,
+                    "Clothing": other_probability,
+                    "Electronics": other_probability,
+                    "Home": other_probability,
+                    "Beauty": other_probability,
+                },
+                sorted_labels=[
+                    "Shoes",
+                    "Sports",
+                    "Clothing",
+                    "Electronics",
+                    "Home",
+                    "Beauty",
+                ],
+            ),
+            candidate_category_set=list(category_set),
+            policy=PolicyDecision(
+                category_set=category_set,
+                abstained=self.prediction.reliability.abstained,
+                reason=self.prediction.reliability.reason,
+                action=self.prediction.reliability.policy_action,
+            ),
+            diagnostics={
+                "runtime": self.prediction.reliability.classifier_runtime,
+                "reason": self.prediction.reliability.classifier_reason,
+            },
+        )
+
+    def extract_attributes(self, payload) -> AttributeExtractionStageResult:
+        reliability = self.prediction.reliability
+        return AttributeExtractionStageResult(
+            attributes=self.prediction.attributes,
+            runtime=reliability.llm_runtime,
+            model=reliability.llm_model,
+            error=None,
+        )
+
+    def score_semantic(self, payload, *, candidate_labels) -> SemanticConsistencyResult:
+        reliability = self.prediction.reliability
+        return SemanticConsistencyResult(
+            score=reliability.semantic_consistency_score,
+            status=reliability.semantic_consistency_status,
+            reason=reliability.semantic_consistency_reason,
+        )
+
+    def assemble_prediction(self, **kwargs) -> PredictionResponse:
+        return self.prediction.model_copy(deep=True)
+
+
+def _install_catalog_graph(
+    monkeypatch,
+    store: SQLiteReviewStore,
+    prediction: PredictionResponse,
+) -> StubReviewGraph:
+    review_graph = StubReviewGraph(prediction)
+    graph = CatalogQualityGraph(StubCatalogPipeline(prediction), review_graph, store)
+    monkeypatch.setattr(app_main, "review_store", store)
+    monkeypatch.setattr(app_main, "review_graph", review_graph)
+    monkeypatch.setattr(app_main, "catalog_quality_graph", graph)
+    return review_graph
 
 
 def test_diagnostics_include_classifier_runtime_metadata() -> None:
@@ -98,6 +189,9 @@ def test_diagnostics_include_classifier_runtime_metadata() -> None:
     assert "review_graph_semantic_trigger_rate" in diagnostics
     assert "review_graph_cache_hit_rate" in diagnostics
     assert "review_graph_cached_step_count" in diagnostics
+    assert "catalog_quality_graph_available" in diagnostics
+    assert "catalog_quality_graph_backend" in diagnostics
+    assert "catalog_quality_graph_reason" in diagnostics
     assert "semantic_scorer_enabled" in diagnostics
     assert "semantic_scorer_client_available" in diagnostics
     assert "semantic_scorer_threshold" in diagnostics
@@ -235,8 +329,7 @@ def test_dashboard_renders_with_missing_artifact(monkeypatch) -> None:
 
 def test_review_queue_page_renders_pending_tasks(monkeypatch, tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
-    monkeypatch.setattr(app_main, "review_store", store)
-    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.2)))
+    _install_catalog_graph(monkeypatch, store, _prediction(confidence=0.2))
     decision = app_main.analyze_listing(ListingInput(title="Ambiguous jacket", description="Needs category review"))
 
     response = app_main.review_queue_page(_build_request("/review"))
@@ -260,8 +353,7 @@ def test_review_queue_page_renders_empty_state(monkeypatch, tmp_path: Path) -> N
 
 def test_review_queue_form_handler_updates_task_and_redirects(monkeypatch, tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
-    monkeypatch.setattr(app_main, "review_store", store)
-    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.2)))
+    _install_catalog_graph(monkeypatch, store, _prediction(confidence=0.2))
     decision = app_main.analyze_listing(ListingInput(title="Ambiguous racket", description="Could be sports"))
     task_id = decision.review_task_id
 
@@ -298,11 +390,10 @@ def test_review_queue_form_handler_rejects_invalid_corrected_attributes_json() -
 
 def test_api_metrics_reports_operational_counts_and_rates(monkeypatch, tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
-    monkeypatch.setattr(app_main, "review_store", store)
-    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.92)))
+    _install_catalog_graph(monkeypatch, store, _prediction(confidence=0.92))
     app_main.analyze_listing(ListingInput(title="Accepted shoe", description="Clear shoe listing"))
 
-    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.2)))
+    _install_catalog_graph(monkeypatch, store, _prediction(confidence=0.2))
     review_decision = app_main.analyze_listing(ListingInput(title="Ambiguous item", description="Needs review"))
     app_main.record_review_task_decision(
         review_decision.review_task_id,
@@ -345,8 +436,7 @@ def test_artifact_routes_return_404_when_missing(monkeypatch, tmp_path: Path) ->
 
 def test_analyze_listing_auto_accepts_and_persists_without_review_task(monkeypatch, tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
-    monkeypatch.setattr(app_main, "review_store", store)
-    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.92)))
+    _install_catalog_graph(monkeypatch, store, _prediction(confidence=0.92))
 
     decision = app_main.analyze_listing(
         ListingInput(title="Lightweight running shoe", description="Black mesh upper size 42")
@@ -363,6 +453,7 @@ def test_analyze_listing_auto_accepts_and_persists_without_review_task(monkeypat
         "semantic_critic_agent",
         "policy_agent",
         "human_review_agent",
+        "decision_agent",
     ]
 
     diagnostics = store.diagnostics()
@@ -372,8 +463,7 @@ def test_analyze_listing_auto_accepts_and_persists_without_review_task(monkeypat
 
 def test_analyze_listing_creates_review_task_for_low_confidence(monkeypatch, tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
-    monkeypatch.setattr(app_main, "review_store", store)
-    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.2)))
+    _install_catalog_graph(monkeypatch, store, _prediction(confidence=0.2))
 
     decision = app_main.analyze_listing(
         ListingInput(title="Ambiguous item", description="Could fit multiple marketplace categories")
@@ -383,8 +473,10 @@ def test_analyze_listing_creates_review_task_for_low_confidence(monkeypatch, tmp
     assert decision.risk_level == "high"
     assert decision.review_task_id is not None
     assert decision.review_task_id.startswith("rev_")
-    assert decision.agent_trace[-1].status == "created"
-    assert decision.agent_trace[-1].reason == "low_confidence"
+    human_trace = next(trace for trace in decision.agent_trace if trace.agent == "human_review_agent")
+    assert human_trace.status == "created"
+    assert human_trace.reason == "low_confidence"
+    assert decision.agent_trace[-1].agent == "decision_agent"
 
     queue = app_main.list_review_queue()
     assert len(queue) == 1
@@ -396,11 +488,10 @@ def test_analyze_listing_creates_review_task_for_low_confidence(monkeypatch, tmp
 
 def test_analyze_listing_creates_review_task_for_low_semantic_consistency(monkeypatch, tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
-    monkeypatch.setattr(app_main, "review_store", store)
-    monkeypatch.setattr(
-        app_main,
-        "review_graph",
-        StubReviewGraph(_prediction(confidence=0.9, semantic_score=0.1, semantic_status="ok")),
+    _install_catalog_graph(
+        monkeypatch,
+        store,
+        _prediction(confidence=0.9, semantic_score=0.1, semantic_status="ok"),
     )
 
     decision = app_main.analyze_listing(
@@ -414,8 +505,7 @@ def test_analyze_listing_creates_review_task_for_low_semantic_consistency(monkey
 
 def test_review_queue_decision_endpoint_updates_task(monkeypatch, tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
-    monkeypatch.setattr(app_main, "review_store", store)
-    monkeypatch.setattr(app_main, "review_graph", StubReviewGraph(_prediction(confidence=0.2)))
+    _install_catalog_graph(monkeypatch, store, _prediction(confidence=0.2))
     decision = app_main.analyze_listing(ListingInput(title="Ambiguous item", description="Needs reviewer"))
     task_id = decision.review_task_id
 
