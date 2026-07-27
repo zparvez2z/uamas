@@ -204,6 +204,8 @@ def test_diagnostics_include_classifier_runtime_metadata() -> None:
     assert "listing_count" in diagnostics
     assert "review_task_count" in diagnostics
     assert "pending_review_task_count" in diagnostics
+    assert "workflow_run_count" in diagnostics
+    assert "failed_workflow_run_count" in diagnostics
 
 
 def test_diagnostics_report_auto_rebuild_for_mismatched_artifact(monkeypatch, tmp_path: Path) -> None:
@@ -311,6 +313,7 @@ def test_dashboard_renders_with_artifact(monkeypatch) -> None:
     assert "Reliability Dashboard" in html
     assert "Review Queue Storage" in html
     assert "Operational Metrics" in html
+    assert "Workflow History" in html
     assert "Trigger Reason Distribution" in html
     assert "Latest Results (JSON)" in html
 
@@ -414,6 +417,12 @@ def test_api_metrics_reports_operational_counts_and_rates(monkeypatch, tmp_path:
     assert metrics.correction_rate == 1.0
     assert metrics.review_status_counts == {"corrected": 1}
     assert metrics.review_reason_counts == {"low_confidence": 1}
+    assert metrics.workflow_run_count == 2
+    assert metrics.completed_workflow_run_count == 2
+    assert metrics.failed_workflow_run_count == 0
+    assert metrics.workflow_success_rate == 1.0
+    assert metrics.failed_agent_run_count == 0
+    assert "classifier_agent" in metrics.average_agent_duration_ms
     assert metrics.llm_runtime_mode in {"MOCK", "LIVE"}
     assert metrics.classifier_runtime in {"ARTIFACT", "TRAINED", "FALLBACK"}
 
@@ -443,6 +452,7 @@ def test_analyze_listing_auto_accepts_and_persists_without_review_task(monkeypat
     )
 
     assert decision.listing_id.startswith("lst_")
+    assert decision.workflow_run_id is not None
     assert decision.decision == "auto_accept"
     assert decision.risk_level == "low"
     assert decision.review_task_id is None
@@ -539,6 +549,49 @@ def test_review_queue_missing_task_returns_404(monkeypatch, tmp_path: Path) -> N
 
     try:
         app_main.record_review_task_decision("rev_missing", ReviewDecision(action="reject"))
+        assert False, "expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 404
+
+
+def test_workflow_history_endpoints_return_run_and_agent_details(monkeypatch, tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    _install_catalog_graph(monkeypatch, store, _prediction(confidence=0.92))
+    decision = app_main.analyze_listing(
+        ListingInput(title="Accepted shoe", description="Clear shoe listing")
+    )
+
+    workflows = app_main.list_workflow_runs()
+    detail = app_main.get_workflow_run(decision.workflow_run_id)
+    agents = app_main.list_workflow_agent_runs(decision.workflow_run_id)
+
+    assert len(workflows) == 1
+    assert workflows[0].id == decision.workflow_run_id
+    assert workflows[0].status == "completed"
+    assert detail.id == decision.workflow_run_id
+    assert detail.decision == "auto_accept"
+    assert len(detail.agent_runs) == 6
+    assert agents == detail.agent_runs
+    assert agents[-1].agent_name == "decision_agent"
+
+
+def test_workflow_history_endpoints_validate_filters_and_missing_runs(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(app_main, "review_store", SQLiteReviewStore(tmp_path / "uamas.db"))
+
+    try:
+        app_main.list_workflow_runs(status="unknown")
+        assert False, "expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 400
+
+    try:
+        app_main.get_workflow_run("run_missing")
+        assert False, "expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 404
+
+    try:
+        app_main.list_workflow_agent_runs("run_missing")
         assert False, "expected HTTPException"
     except HTTPException as exc:
         assert exc.status_code == 404

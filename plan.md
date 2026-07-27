@@ -203,8 +203,9 @@ Status: **implemented for the first explicit multi-agent slice**. `POST /api/lis
 
 Deferred from this slice:
 - activating `reject_or_request_clarification` policy rules,
-- durable `workflow_runs` and per-agent execution history,
 - async provider clients and distributed execution.
+
+Durable execution history status: **implemented**. Every catalog analysis creates a `workflow_runs` record before agent execution, records safe per-agent summaries and timings in `agent_runs`, links predictions and review tasks transactionally, and marks the workflow `completed` or `failed`. Read-only history APIs and aggregate duration/failure metrics are available.
 
 ### Phase 4: API + UI
 Add first-class API endpoints while keeping the existing web UI.
@@ -221,6 +222,12 @@ New API endpoints:
   - accepts reviewer action and optional corrected category/attributes.
 - `GET /api/metrics`
   - returns operational metrics.
+- `GET /api/workflow-runs`
+  - lists durable workflow attempts with optional status filtering.
+- `GET /api/workflow-runs/{run_id}`
+  - returns one workflow and its agent execution history.
+- `GET /api/workflow-runs/{run_id}/agents`
+  - returns per-agent status, timing, and safe output summaries.
 
 Status: **implemented for the current product slice**. Listing analysis endpoints, review queue JSON endpoints, the `/review` browser UI, and `/api/metrics` operational metrics are available.
 
@@ -284,6 +291,9 @@ Add models for:
 - `ReviewTask`
 - `ReviewDecision`
 - `ReviewQueueItem`
+- `WorkflowRun`
+- `WorkflowRunDetail`
+- `AgentRun`
 
 ### Analyze Response Shape
 `POST /api/listings/analyze` should return:
@@ -291,6 +301,7 @@ Add models for:
 ```json
 {
   "listing_id": "string",
+  "workflow_run_id": "string",
   "decision": "auto_accept | needs_human_review | reject_or_request_clarification",
   "risk_level": "low | medium | high",
   "explanation": "string",

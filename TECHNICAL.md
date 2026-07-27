@@ -46,7 +46,7 @@ flowchart LR
   EA --> P
   SCA --> P
   RG --> P
-  HRA --> DB[(SQLite Review Store)]
+  HRA --> DB[(SQLite Operational Store)]
   CQG --> DB
   DA --> O[CatalogQualityDecision]
   API --> D[Diagnostics / Metrics / Dashboard]
@@ -77,7 +77,8 @@ flowchart LR
 - `reliable_genai/review_graph.py` optionally orchestrates second-pass review through LangGraph when enabled.
 - `reliable_genai/pipeline.py` exposes reusable classification, extraction, semantic-scoring, and response-assembly stages while preserving `predict()`.
 - `reliable_genai/llm_wrappers.py` handles GitHub Models access, mock mode, and fallback extraction.
-- `reliable_genai/persistence.py` owns SQLite schema creation and repository operations for listings, predictions, and review tasks.
+- `reliable_genai/persistence.py` owns SQLite schema and repository operations for listings, predictions, review tasks, workflow runs, and agent runs.
+- `reliable_genai/workflow_history.py` records bounded per-agent summaries, durations, degradation, and failures.
 - `reliable_genai/runtime_profile.py` resolves classifier-critical runtime defaults and precedence.
 - `reliable_genai/models.py` defines the Pydantic request and response models.
 
@@ -94,14 +95,16 @@ flowchart LR
 
 ### Catalog review API flow
 1. A caller submits title/description to `POST /api/listings/analyze`.
-2. `CatalogQualityGraph` starts classifier and attribute-extraction agents as independent branches.
-3. The semantic critic evaluates the classifier candidate set while extraction completes independently.
-4. The pipeline assembles one `PredictionResponse`; the optional `ReviewGraphRunner` gate can inspect that precomputed first pass without duplicating it.
-5. The listing and selected prediction are persisted to SQLite.
-6. The deterministic policy agent maps reliability evidence to `auto_accept` or `needs_human_review`.
-7. When review is needed, the human-review agent creates a persisted `pending` task.
-8. The decision agent returns `CatalogQualityDecision` with ordered execution traces.
-9. Reviewers inspect and resolve tasks through the JSON API or `/review`; `/api/metrics` exposes operational outcomes.
+2. The store creates the listing and a durable `running` workflow before provider or model work begins.
+3. `CatalogQualityGraph` starts classifier and attribute-extraction agents as independent branches; each execution is timed and persisted.
+4. The semantic critic evaluates the classifier candidate set while extraction completes independently.
+5. The pipeline assembles one `PredictionResponse`; the optional `ReviewGraphRunner` gate inspects that precomputed first pass without duplicating it.
+6. The selected prediction is persisted and transactionally linked to the workflow.
+7. The deterministic policy agent maps reliability evidence to `auto_accept` or `needs_human_review`.
+8. When review is needed, the human-review agent transactionally creates and links a `pending` task.
+9. The decision agent returns `CatalogQualityDecision` with its `workflow_run_id`; the workflow is then marked completed.
+10. Escaping agent errors mark both the agent run and workflow failed before the error propagates.
+11. Reviewers inspect and resolve tasks through the JSON API or `/review`; history and metrics remain queryable after restart.
 
 ## 5) Files and Responsibilities
 ### `app/main.py`
@@ -115,8 +118,11 @@ flowchart LR
   - `GET /api/review-queue/{task_id}`
   - `POST /api/review-queue/{task_id}/decision`
   - `GET /api/metrics`
+  - `GET /api/workflow-runs`
+  - `GET /api/workflow-runs/{run_id}`
+  - `GET /api/workflow-runs/{run_id}/agents`
 - Passes runtime metadata and diagnostics into the Jinja template context.
-- Initializes the SQLite review store used by the next review-queue workflow slice.
+- Initializes the SQLite operational store and durable catalog graph.
 
 ### `reliable_genai/pipeline.py`
 - Creates the category prediction through the calibrated classifier or keyword fallback.
@@ -169,15 +175,22 @@ flowchart LR
 ### `reliable_genai/models.py`
 - Defines request and response schemas.
 - Carries reliability metadata such as runtime mode, model name, and confidence values.
-- Defines additive catalog workflow contracts such as `ListingInput`, `CatalogQualityDecision`, `ReviewTask`, `ReviewDecision`, and `ReviewQueueItem`.
+- Defines additive catalog workflow contracts such as `ListingInput`, `CatalogQualityDecision`, `ReviewTask`, `WorkflowRun`, and `AgentRun`.
 
 ### `reliable_genai/persistence.py`
 - Creates the SQLite schema on startup.
-- Stores submitted listings, prediction payloads, and review tasks.
+- Stores submitted listings, prediction payloads, review tasks, workflow runs, and agent runs.
 - Supports review task listing and approve/correct/reject state transitions.
-- Aggregates operational metrics such as status counts, reason counts, auto-accept rate, human-review rate, and correction rate.
+- Uses WAL mode, bounded busy waits, and short synchronized writes for parallel agent branches.
+- Aggregates workflow success, duration, degradation, and failure metrics alongside review metrics.
 - Reports persistence diagnostics for the dashboard and `/diagnostics`.
 - Defaults to `data/uamas.db` and supports `UAMAS_DB_PATH` override.
+
+### `reliable_genai/workflow_history.py`
+- Wraps domain-agent calls without coupling agent implementations to SQLite.
+- Stores safe `AgentTrace` summaries instead of raw prompts or provider payloads.
+- Records completed, degraded, skipped, and failed states with durations.
+- Preserves the original exception after recording a failed agent run.
 
 ## 6) Reliability Metadata
 The response includes:

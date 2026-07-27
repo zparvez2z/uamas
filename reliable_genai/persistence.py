@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import sqlite3
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .models import ListingInput, PredictionResponse, ReviewDecision, ReviewQueueItem, ReviewTask
+from .models import (
+    AgentRun,
+    ListingInput,
+    PredictionResponse,
+    ReviewDecision,
+    ReviewQueueItem,
+    ReviewTask,
+    WorkflowRun,
+    WorkflowRunDetail,
+)
 
 
 DEFAULT_DB_PATH = Path("data/uamas.db")
@@ -20,7 +31,7 @@ REVIEW_DECISION_STATUS = {
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def resolve_db_path(path: str | Path | None = None) -> Path:
@@ -35,10 +46,12 @@ class SQLiteReviewStore:
     def __init__(self, db_path: str | Path | None = None) -> None:
         self.db_path = resolve_db_path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._write_lock = threading.RLock()
         self.initialize()
 
     def initialize(self) -> None:
         with self._connect() as conn:
+            conn.execute("PRAGMA journal_mode = WAL")
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS listings (
@@ -77,47 +90,288 @@ class SQLiteReviewStore:
 
                 CREATE INDEX IF NOT EXISTS idx_review_tasks_status
                     ON review_tasks(status, updated_at);
+
+                CREATE TABLE IF NOT EXISTS workflow_runs (
+                    id TEXT PRIMARY KEY,
+                    listing_id TEXT NOT NULL,
+                    prediction_id TEXT,
+                    review_task_id TEXT,
+                    status TEXT NOT NULL,
+                    decision TEXT,
+                    risk_level TEXT,
+                    graph_backend TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    duration_ms REAL,
+                    error_type TEXT,
+                    error_message TEXT,
+                    FOREIGN KEY(listing_id) REFERENCES listings(id),
+                    FOREIGN KEY(prediction_id) REFERENCES predictions(id),
+                    FOREIGN KEY(review_task_id) REFERENCES review_tasks(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS agent_runs (
+                    id TEXT PRIMARY KEY,
+                    workflow_run_id TEXT NOT NULL,
+                    agent_name TEXT NOT NULL,
+                    attempt INTEGER NOT NULL DEFAULT 1,
+                    status TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    duration_ms REAL,
+                    input_summary_json TEXT NOT NULL DEFAULT '{}',
+                    output_json TEXT NOT NULL DEFAULT '{}',
+                    reason TEXT,
+                    error_type TEXT,
+                    error_message TEXT,
+                    FOREIGN KEY(workflow_run_id) REFERENCES workflow_runs(id),
+                    UNIQUE(workflow_run_id, agent_name, attempt)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_workflow_runs_status_started
+                    ON workflow_runs(status, started_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_agent_runs_workflow_started
+                    ON agent_runs(workflow_run_id, started_at);
+                CREATE INDEX IF NOT EXISTS idx_agent_runs_name_status
+                    ON agent_runs(agent_name, status);
                 """
             )
 
     def create_listing(self, listing: ListingInput) -> str:
         listing_id = self._new_id("lst")
         now = utc_now()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO listings (id, external_id, title, description, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (listing_id, listing.external_id, listing.title, listing.description, now),
-            )
+        with self._write_lock:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO listings (id, external_id, title, description, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (listing_id, listing.external_id, listing.title, listing.description, now),
+                )
         return listing_id
+
+    def start_workflow_run(
+        self,
+        listing: ListingInput,
+        *,
+        graph_backend: str,
+    ) -> WorkflowRun:
+        listing_id = self._new_id("lst")
+        workflow_run_id = self._new_id("run")
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO listings (id, external_id, title, description, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (listing_id, listing.external_id, listing.title, listing.description, now),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO workflow_runs (
+                        id,
+                        listing_id,
+                        status,
+                        graph_backend,
+                        started_at
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (workflow_run_id, listing_id, "running", graph_backend, now),
+                )
+        run = self.get_workflow_run(workflow_run_id)
+        if run is None:
+            raise RuntimeError(f"failed to create workflow run {workflow_run_id}")
+        return run
+
+    def start_agent_run(
+        self,
+        workflow_run_id: str,
+        *,
+        agent_name: str,
+        input_summary: dict[str, object] | None = None,
+        attempt: int = 1,
+    ) -> AgentRun:
+        agent_run_id = self._new_id("agt")
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO agent_runs (
+                        id,
+                        workflow_run_id,
+                        agent_name,
+                        attempt,
+                        status,
+                        started_at,
+                        input_summary_json,
+                        output_json
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        agent_run_id,
+                        workflow_run_id,
+                        agent_name,
+                        attempt,
+                        "running",
+                        now,
+                        json.dumps(input_summary or {}),
+                        "{}",
+                    ),
+                )
+        run = self.get_agent_run(agent_run_id)
+        if run is None:
+            raise RuntimeError(f"failed to create agent run {agent_run_id}")
+        return run
+
+    def complete_agent_run(
+        self,
+        agent_run_id: str,
+        *,
+        status: str,
+        output: dict[str, object] | None,
+        reason: str | None,
+        duration_ms: float,
+    ) -> AgentRun:
+        if status not in {"completed", "degraded", "skipped"}:
+            raise ValueError(f"invalid completed agent status: {status}")
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE agent_runs
+                    SET
+                        status = ?,
+                        completed_at = ?,
+                        duration_ms = ?,
+                        output_json = ?,
+                        reason = ?,
+                        error_type = NULL,
+                        error_message = NULL
+                    WHERE id = ?
+                    """,
+                    (
+                        status,
+                        now,
+                        round(max(duration_ms, 0.0), 3),
+                        json.dumps(output or {}),
+                        self._bounded_error(reason) if reason else None,
+                        agent_run_id,
+                    ),
+                )
+        if cursor.rowcount == 0:
+            raise KeyError(f"agent run not found: {agent_run_id}")
+        run = self.get_agent_run(agent_run_id)
+        if run is None:
+            raise KeyError(f"agent run not found: {agent_run_id}")
+        return run
+
+    def fail_agent_run(
+        self,
+        agent_run_id: str,
+        *,
+        error_type: str,
+        error_message: str,
+        duration_ms: float,
+    ) -> AgentRun:
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE agent_runs
+                    SET
+                        status = 'failed',
+                        completed_at = ?,
+                        duration_ms = ?,
+                        error_type = ?,
+                        error_message = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        now,
+                        round(max(duration_ms, 0.0), 3),
+                        error_type,
+                        self._bounded_error(error_message),
+                        agent_run_id,
+                    ),
+                )
+        if cursor.rowcount == 0:
+            raise KeyError(f"agent run not found: {agent_run_id}")
+        run = self.get_agent_run(agent_run_id)
+        if run is None:
+            raise KeyError(f"agent run not found: {agent_run_id}")
+        return run
+
+    def get_agent_run(self, agent_run_id: str) -> AgentRun | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM agent_runs WHERE id = ?",
+                (agent_run_id,),
+            ).fetchone()
+        return self._agent_run_from_row(row) if row else None
+
+    def list_agent_runs(self, workflow_run_id: str) -> list[AgentRun]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM agent_runs
+                WHERE workflow_run_id = ?
+                ORDER BY started_at, rowid
+                """,
+                (workflow_run_id,),
+            ).fetchall()
+        return [self._agent_run_from_row(row) for row in rows]
 
     def create_prediction(self, listing_id: str, prediction: PredictionResponse) -> str:
         prediction_id = self._new_id("pred")
         now = utc_now()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO predictions (
-                    id,
-                    listing_id,
-                    category_set_json,
-                    attributes_json,
-                    reliability_json,
-                    created_at
+        with self._write_lock:
+            with self._connect() as conn:
+                self._insert_prediction(
+                    conn,
+                    prediction_id=prediction_id,
+                    listing_id=listing_id,
+                    prediction=prediction,
+                    created_at=now,
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    prediction_id,
-                    listing_id,
-                    json.dumps(prediction.category_set),
-                    prediction.attributes.model_dump_json(),
-                    prediction.reliability.model_dump_json(),
-                    now,
-                ),
-            )
+        return prediction_id
+
+    def create_prediction_for_workflow(
+        self,
+        workflow_run_id: str,
+        *,
+        listing_id: str,
+        prediction: PredictionResponse,
+    ) -> str:
+        prediction_id = self._new_id("pred")
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                self._insert_prediction(
+                    conn,
+                    prediction_id=prediction_id,
+                    listing_id=listing_id,
+                    prediction=prediction,
+                    created_at=now,
+                )
+                cursor = conn.execute(
+                    """
+                    UPDATE workflow_runs
+                    SET prediction_id = ?
+                    WHERE id = ? AND listing_id = ?
+                    """,
+                    (prediction_id, workflow_run_id, listing_id),
+                )
+                if cursor.rowcount == 0:
+                    raise KeyError(f"workflow run not found: {workflow_run_id}")
         return prediction_id
 
     def create_review_task(
@@ -130,38 +384,54 @@ class SQLiteReviewStore:
     ) -> ReviewTask:
         task_id = self._new_id("rev")
         now = utc_now()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO review_tasks (
-                    id,
-                    listing_id,
-                    prediction_id,
-                    status,
-                    reason,
-                    risk_level,
-                    corrected_category,
-                    corrected_attributes_json,
-                    notes,
-                    created_at,
-                    updated_at
+        with self._write_lock:
+            with self._connect() as conn:
+                self._insert_review_task(
+                    conn,
+                    task_id=task_id,
+                    listing_id=listing_id,
+                    prediction_id=prediction_id,
+                    reason=reason,
+                    risk_level=risk_level,
+                    now=now,
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    task_id,
-                    listing_id,
-                    prediction_id,
-                    "pending",
-                    reason,
-                    risk_level,
-                    None,
-                    "{}",
-                    None,
-                    now,
-                    now,
-                ),
-            )
+        task = self.get_review_task(task_id)
+        if task is None:
+            raise RuntimeError(f"failed to create review task {task_id}")
+        return task
+
+    def create_review_task_for_workflow(
+        self,
+        workflow_run_id: str,
+        *,
+        listing_id: str,
+        prediction_id: str,
+        reason: str,
+        risk_level: str,
+    ) -> ReviewTask:
+        task_id = self._new_id("rev")
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                self._insert_review_task(
+                    conn,
+                    task_id=task_id,
+                    listing_id=listing_id,
+                    prediction_id=prediction_id,
+                    reason=reason,
+                    risk_level=risk_level,
+                    now=now,
+                )
+                cursor = conn.execute(
+                    """
+                    UPDATE workflow_runs
+                    SET review_task_id = ?
+                    WHERE id = ? AND listing_id = ? AND prediction_id = ?
+                    """,
+                    (task_id, workflow_run_id, listing_id, prediction_id),
+                )
+                if cursor.rowcount == 0:
+                    raise KeyError(f"workflow run not found: {workflow_run_id}")
         task = self.get_review_task(task_id)
         if task is None:
             raise RuntimeError(f"failed to create review task {task_id}")
@@ -199,30 +469,147 @@ class SQLiteReviewStore:
             rows = conn.execute(query, params).fetchall()
         return [self._queue_item_from_row(row) for row in rows]
 
+    def complete_workflow_run(
+        self,
+        workflow_run_id: str,
+        *,
+        decision: str,
+        risk_level: str,
+        duration_ms: float,
+    ) -> WorkflowRun:
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE workflow_runs
+                    SET
+                        status = 'completed',
+                        decision = ?,
+                        risk_level = ?,
+                        completed_at = ?,
+                        duration_ms = ?,
+                        error_type = NULL,
+                        error_message = NULL
+                    WHERE id = ?
+                    """,
+                    (
+                        decision,
+                        risk_level,
+                        now,
+                        round(max(duration_ms, 0.0), 3),
+                        workflow_run_id,
+                    ),
+                )
+        if cursor.rowcount == 0:
+            raise KeyError(f"workflow run not found: {workflow_run_id}")
+        run = self.get_workflow_run(workflow_run_id)
+        if run is None:
+            raise KeyError(f"workflow run not found: {workflow_run_id}")
+        return run
+
+    def fail_workflow_run(
+        self,
+        workflow_run_id: str,
+        *,
+        error_type: str,
+        error_message: str,
+        duration_ms: float,
+    ) -> WorkflowRun:
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE workflow_runs
+                    SET
+                        status = 'failed',
+                        completed_at = ?,
+                        duration_ms = ?,
+                        error_type = ?,
+                        error_message = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        now,
+                        round(max(duration_ms, 0.0), 3),
+                        error_type,
+                        self._bounded_error(error_message),
+                        workflow_run_id,
+                    ),
+                )
+        if cursor.rowcount == 0:
+            raise KeyError(f"workflow run not found: {workflow_run_id}")
+        run = self.get_workflow_run(workflow_run_id)
+        if run is None:
+            raise KeyError(f"workflow run not found: {workflow_run_id}")
+        return run
+
+    def get_workflow_run(self, workflow_run_id: str) -> WorkflowRun | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM workflow_runs WHERE id = ?",
+                (workflow_run_id,),
+            ).fetchone()
+        return self._workflow_run_from_row(row) if row else None
+
+    def get_workflow_run_detail(self, workflow_run_id: str) -> WorkflowRunDetail | None:
+        run = self.get_workflow_run(workflow_run_id)
+        if run is None:
+            return None
+        return WorkflowRunDetail(
+            **run.model_dump(),
+            agent_runs=self.list_agent_runs(workflow_run_id),
+        )
+
+    def list_workflow_runs(
+        self,
+        *,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[WorkflowRun]:
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        if status is not None and status not in {"running", "completed", "failed"}:
+            raise ValueError(f"invalid workflow status: {status}")
+
+        query = "SELECT * FROM workflow_runs"
+        params: tuple[Any, ...]
+        if status is None:
+            query += " ORDER BY started_at DESC LIMIT ?"
+            params = (limit,)
+        else:
+            query += " WHERE status = ? ORDER BY started_at DESC LIMIT ?"
+            params = (status, limit)
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [self._workflow_run_from_row(row) for row in rows]
+
     def record_review_decision(self, task_id: str, decision: ReviewDecision) -> ReviewTask:
         status = REVIEW_DECISION_STATUS[decision.action]
         now = utc_now()
-        with self._connect() as conn:
-            cursor = conn.execute(
-                """
-                UPDATE review_tasks
-                SET
-                    status = ?,
-                    corrected_category = ?,
-                    corrected_attributes_json = ?,
-                    notes = ?,
-                    updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    status,
-                    decision.corrected_category,
-                    json.dumps(decision.corrected_attributes),
-                    decision.notes,
-                    now,
-                    task_id,
-                ),
-            )
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE review_tasks
+                    SET
+                        status = ?,
+                        corrected_category = ?,
+                        corrected_attributes_json = ?,
+                        notes = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        status,
+                        decision.corrected_category,
+                        json.dumps(decision.corrected_attributes),
+                        decision.notes,
+                        now,
+                        task_id,
+                    ),
+                )
         if cursor.rowcount == 0:
             raise KeyError(f"review task not found: {task_id}")
         task = self.get_review_task(task_id)
@@ -242,11 +629,87 @@ class SQLiteReviewStore:
                 reason_rows = conn.execute(
                     "SELECT reason, COUNT(*) AS count FROM review_tasks GROUP BY reason"
                 ).fetchall()
+                workflow_status_rows = conn.execute(
+                    "SELECT status, COUNT(*) AS count FROM workflow_runs GROUP BY status"
+                ).fetchall()
+                workflow_decision_rows = conn.execute(
+                    """
+                    SELECT decision, COUNT(*) AS count
+                    FROM workflow_runs
+                    WHERE status = 'completed' AND decision IS NOT NULL
+                    GROUP BY decision
+                    """
+                ).fetchall()
+                workflow_duration_rows = conn.execute(
+                    """
+                    SELECT duration_ms
+                    FROM workflow_runs
+                    WHERE status = 'completed' AND duration_ms IS NOT NULL
+                    ORDER BY duration_ms
+                    """
+                ).fetchall()
+                agent_status_rows = conn.execute(
+                    "SELECT status, COUNT(*) AS count FROM agent_runs GROUP BY status"
+                ).fetchall()
+                agent_duration_rows = conn.execute(
+                    """
+                    SELECT agent_name, AVG(duration_ms) AS average_duration_ms
+                    FROM agent_runs
+                    WHERE duration_ms IS NOT NULL
+                    GROUP BY agent_name
+                    """
+                ).fetchall()
+                legacy_listing_count = int(
+                    conn.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM listings
+                        WHERE id NOT IN (SELECT listing_id FROM workflow_runs)
+                        """
+                    ).fetchone()[0]
+                )
+                legacy_review_count = int(
+                    conn.execute(
+                        """
+                        SELECT COUNT(*)
+                        FROM review_tasks
+                        WHERE listing_id NOT IN (SELECT listing_id FROM workflow_runs)
+                        """
+                    ).fetchone()[0]
+                )
 
             status_counts = {row["status"]: int(row["count"]) for row in status_rows}
             reason_counts = {row["reason"]: int(row["count"]) for row in reason_rows}
-            auto_accept_count = max(listing_count - review_task_count, 0)
-            needs_human_review_count = review_task_count
+            workflow_status_counts = {
+                row["status"]: int(row["count"]) for row in workflow_status_rows
+            }
+            workflow_decision_counts = {
+                row["decision"]: int(row["count"]) for row in workflow_decision_rows
+            }
+            agent_status_counts = {
+                row["status"]: int(row["count"]) for row in agent_status_rows
+            }
+            workflow_run_count = sum(workflow_status_counts.values())
+            completed_workflow_count = workflow_status_counts.get("completed", 0)
+            durations = [float(row["duration_ms"]) for row in workflow_duration_rows]
+            average_workflow_duration = (
+                round(sum(durations) / len(durations), 3) if durations else 0.0
+            )
+            p95_index = max(math.ceil(0.95 * len(durations)) - 1, 0)
+            p95_workflow_duration = round(durations[p95_index], 3) if durations else 0.0
+            average_agent_duration = {
+                row["agent_name"]: round(float(row["average_duration_ms"]), 3)
+                for row in agent_duration_rows
+            }
+            auto_accept_count = workflow_decision_counts.get("auto_accept", 0) + max(
+                legacy_listing_count - legacy_review_count,
+                0,
+            )
+            needs_human_review_count = workflow_decision_counts.get(
+                "needs_human_review",
+                0,
+            ) + legacy_review_count
+            decided_count = auto_accept_count + needs_human_review_count
             corrected_count = status_counts.get("corrected", 0)
             return {
                 "available": True,
@@ -263,9 +726,25 @@ class SQLiteReviewStore:
                 "rejected_review_task_count": status_counts.get("rejected", 0),
                 "auto_accept_count": auto_accept_count,
                 "needs_human_review_count": needs_human_review_count,
-                "auto_accept_rate": round(auto_accept_count / listing_count, 3) if listing_count else 0.0,
-                "human_review_rate": round(needs_human_review_count / listing_count, 3) if listing_count else 0.0,
+                "auto_accept_rate": round(auto_accept_count / decided_count, 3) if decided_count else 0.0,
+                "human_review_rate": (
+                    round(needs_human_review_count / decided_count, 3) if decided_count else 0.0
+                ),
                 "correction_rate": round(corrected_count / review_task_count, 3) if review_task_count else 0.0,
+                "workflow_run_count": workflow_run_count,
+                "completed_workflow_run_count": completed_workflow_count,
+                "failed_workflow_run_count": workflow_status_counts.get("failed", 0),
+                "running_workflow_run_count": workflow_status_counts.get("running", 0),
+                "workflow_success_rate": (
+                    round(completed_workflow_count / workflow_run_count, 3)
+                    if workflow_run_count
+                    else 0.0
+                ),
+                "average_workflow_duration_ms": average_workflow_duration,
+                "p95_workflow_duration_ms": p95_workflow_duration,
+                "degraded_agent_run_count": agent_status_counts.get("degraded", 0),
+                "failed_agent_run_count": agent_status_counts.get("failed", 0),
+                "average_agent_duration_ms": average_agent_duration,
             }
         except Exception as exc:
             return {
@@ -286,6 +765,16 @@ class SQLiteReviewStore:
                 "auto_accept_rate": 0.0,
                 "human_review_rate": 0.0,
                 "correction_rate": 0.0,
+                "workflow_run_count": 0,
+                "completed_workflow_run_count": 0,
+                "failed_workflow_run_count": 0,
+                "running_workflow_run_count": 0,
+                "workflow_success_rate": 0.0,
+                "average_workflow_duration_ms": 0.0,
+                "p95_workflow_duration_ms": 0.0,
+                "degraded_agent_run_count": 0,
+                "failed_agent_run_count": 0,
+                "average_agent_duration_ms": {},
             }
 
     def diagnostics(self) -> dict[str, object]:
@@ -297,6 +786,8 @@ class SQLiteReviewStore:
                 "listing_count": metrics["listing_count"],
                 "review_task_count": metrics["review_task_count"],
                 "pending_review_task_count": metrics["pending_review_task_count"],
+                "workflow_run_count": metrics["workflow_run_count"],
+                "failed_workflow_run_count": metrics["failed_workflow_run_count"],
                 "error": metrics["error"],
             }
         except Exception as exc:
@@ -306,18 +797,104 @@ class SQLiteReviewStore:
                 "listing_count": 0,
                 "review_task_count": 0,
                 "pending_review_task_count": 0,
+                "workflow_run_count": 0,
+                "failed_workflow_run_count": 0,
                 "error": str(exc),
             }
 
+    @staticmethod
+    def _insert_prediction(
+        conn: sqlite3.Connection,
+        *,
+        prediction_id: str,
+        listing_id: str,
+        prediction: PredictionResponse,
+        created_at: str,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO predictions (
+                id,
+                listing_id,
+                category_set_json,
+                attributes_json,
+                reliability_json,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                prediction_id,
+                listing_id,
+                json.dumps(prediction.category_set),
+                prediction.attributes.model_dump_json(),
+                prediction.reliability.model_dump_json(),
+                created_at,
+            ),
+        )
+
+    @staticmethod
+    def _insert_review_task(
+        conn: sqlite3.Connection,
+        *,
+        task_id: str,
+        listing_id: str,
+        prediction_id: str | None,
+        reason: str,
+        risk_level: str,
+        now: str,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO review_tasks (
+                id,
+                listing_id,
+                prediction_id,
+                status,
+                reason,
+                risk_level,
+                corrected_category,
+                corrected_attributes_json,
+                notes,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                task_id,
+                listing_id,
+                prediction_id,
+                "pending",
+                reason,
+                risk_level,
+                None,
+                "{}",
+                None,
+                now,
+                now,
+            ),
+        )
+
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=5.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA busy_timeout = 5000")
         return conn
 
     @staticmethod
     def _new_id(prefix: str) -> str:
         return f"{prefix}_{uuid.uuid4().hex}"
+
+    @staticmethod
+    def _bounded_error(message: str, limit: int = 1000) -> str:
+        sanitized = message
+        for env_name in ("GITHUB_TOKEN", "GITHUB_MODELS_API_KEY"):
+            secret = os.getenv(env_name, "")
+            if secret:
+                sanitized = sanitized.replace(secret, "[REDACTED]")
+        return sanitized[:limit]
 
     @staticmethod
     def _task_from_row(row: sqlite3.Row) -> ReviewTask:
@@ -333,6 +910,42 @@ class SQLiteReviewStore:
             notes=row["notes"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    def _workflow_run_from_row(row: sqlite3.Row) -> WorkflowRun:
+        return WorkflowRun(
+            id=row["id"],
+            listing_id=row["listing_id"],
+            prediction_id=row["prediction_id"],
+            review_task_id=row["review_task_id"],
+            status=row["status"],
+            decision=row["decision"],
+            risk_level=row["risk_level"],
+            graph_backend=row["graph_backend"],
+            started_at=row["started_at"],
+            completed_at=row["completed_at"],
+            duration_ms=row["duration_ms"],
+            error_type=row["error_type"],
+            error_message=row["error_message"],
+        )
+
+    @staticmethod
+    def _agent_run_from_row(row: sqlite3.Row) -> AgentRun:
+        return AgentRun(
+            id=row["id"],
+            workflow_run_id=row["workflow_run_id"],
+            agent_name=row["agent_name"],
+            attempt=row["attempt"],
+            status=row["status"],
+            started_at=row["started_at"],
+            completed_at=row["completed_at"],
+            duration_ms=row["duration_ms"],
+            input_summary=json.loads(row["input_summary_json"]),
+            output=json.loads(row["output_json"]),
+            reason=row["reason"],
+            error_type=row["error_type"],
+            error_message=row["error_message"],
         )
 
     @classmethod

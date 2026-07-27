@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from time import perf_counter
 from typing import Any, TypedDict
 
 from .agents import (
@@ -27,6 +28,7 @@ from .pipeline import (
 )
 from .review_graph import ReviewGraphRunner
 from .semantic_scorer import SemanticConsistencyResult
+from .workflow_history import WorkflowRecorder
 
 try:
     from langgraph.graph import END, START, StateGraph
@@ -39,6 +41,7 @@ except Exception:  # pragma: no cover - exercised through availability checks.
 class CatalogQualityState(TypedDict, total=False):
     listing: ListingInput
     item: ProductInput
+    workflow_run_id: str
     classification: ClassificationStageResult
     extraction: AttributeExtractionStageResult
     semantic: SemanticConsistencyResult
@@ -112,6 +115,7 @@ class CatalogQualityGraph:
         )
         self.human_review_agent = HumanReviewAgent(store)
         self.decision_agent = DecisionAgent()
+        self.recorder = WorkflowRecorder(store)
 
         self.available = LANGGRAPH_AVAILABLE
         self.backend = "langgraph" if self.available else "sequential"
@@ -160,27 +164,47 @@ class CatalogQualityGraph:
         return builder.compile()
 
     def _node_classifier(self, state: CatalogQualityState) -> CatalogQualityState:
-        result = self.classifier_agent.run(state["item"])
+        result, trace = self.recorder.run(
+            workflow_run_id=state["workflow_run_id"],
+            agent_name="classifier_agent",
+            operation=lambda: self.classifier_agent.run(state["item"]),
+            trace_builder=self.classifier_agent.trace,
+            input_summary={"listing_id": state["listing_id"]},
+        )
         return {
             "classification": result,
-            "classifier_trace": self.classifier_agent.trace(result),
+            "classifier_trace": trace,
         }
 
     def _node_extraction(self, state: CatalogQualityState) -> CatalogQualityState:
-        result = self.extraction_agent.run(state["item"])
+        result, trace = self.recorder.run(
+            workflow_run_id=state["workflow_run_id"],
+            agent_name="attribute_extraction_agent",
+            operation=lambda: self.extraction_agent.run(state["item"]),
+            trace_builder=self.extraction_agent.trace,
+            input_summary={"listing_id": state["listing_id"]},
+        )
         return {
             "extraction": result,
-            "extraction_trace": self.extraction_agent.trace(result),
+            "extraction_trace": trace,
         }
 
     def _node_semantic(self, state: CatalogQualityState) -> CatalogQualityState:
-        result = self.semantic_agent.run(
-            state["item"],
-            state["classification"],
+        result, trace = self.recorder.run(
+            workflow_run_id=state["workflow_run_id"],
+            agent_name="semantic_critic_agent",
+            operation=lambda: self.semantic_agent.run(
+                state["item"],
+                state["classification"],
+            ),
+            trace_builder=self.semantic_agent.trace,
+            input_summary={
+                "candidate_labels": state["classification"].candidate_category_set,
+            },
         )
         return {
             "semantic": result,
-            "semantic_trace": self.semantic_agent.trace(result),
+            "semantic_trace": trace,
         }
 
     def _node_assemble_prediction(self, state: CatalogQualityState) -> CatalogQualityState:
@@ -199,18 +223,30 @@ class CatalogQualityGraph:
         return {"prediction": prediction}
 
     def _node_persist_analysis(self, state: CatalogQualityState) -> CatalogQualityState:
-        listing_id = self.store.create_listing(state["listing"])
-        prediction_id = self.store.create_prediction(listing_id, state["prediction"])
+        prediction_id = self.store.create_prediction_for_workflow(
+            state["workflow_run_id"],
+            listing_id=state["listing_id"],
+            prediction=state["prediction"],
+        )
         return {
-            "listing_id": listing_id,
             "prediction_id": prediction_id,
         }
 
     def _node_policy(self, state: CatalogQualityState) -> CatalogQualityState:
-        result = self.policy_agent.run(state["prediction"])
+        result, trace = self.recorder.run(
+            workflow_run_id=state["workflow_run_id"],
+            agent_name="policy_agent",
+            operation=lambda: self.policy_agent.run(state["prediction"]),
+            trace_builder=self.policy_agent.trace,
+            input_summary={
+                "category_set": state["prediction"].category_set,
+                "confidence": state["prediction"].reliability.confidence,
+                "semantic_status": state["prediction"].reliability.semantic_consistency_status,
+            },
+        )
         return {
             "policy": result,
-            "policy_trace": self.policy_agent.trace(result),
+            "policy_trace": trace,
         }
 
     @staticmethod
@@ -220,17 +256,28 @@ class CatalogQualityGraph:
         return "decision_agent"
 
     def _node_human_review(self, state: CatalogQualityState) -> CatalogQualityState:
-        review_task_id = self.human_review_agent.run(
-            listing_id=state["listing_id"],
-            prediction_id=state["prediction_id"],
-            policy=state["policy"],
+        review_task_id, trace = self.recorder.run(
+            workflow_run_id=state["workflow_run_id"],
+            agent_name="human_review_agent",
+            operation=lambda: self.human_review_agent.run(
+                workflow_run_id=state["workflow_run_id"],
+                listing_id=state["listing_id"],
+                prediction_id=state["prediction_id"],
+                policy=state["policy"],
+            ),
+            trace_builder=lambda task_id: self.human_review_agent.trace(
+                review_task_id=task_id,
+                reason=state["policy"].reason,
+            ),
+            input_summary={
+                "listing_id": state["listing_id"],
+                "prediction_id": state["prediction_id"],
+                "reason": state["policy"].reason,
+            },
         )
         return {
             "review_task_id": review_task_id,
-            "human_review_trace": self.human_review_agent.trace(
-                review_task_id=review_task_id,
-                reason=state["policy"].reason,
-            ),
+            "human_review_trace": trace,
         }
 
     def _node_decision(self, state: CatalogQualityState) -> CatalogQualityState:
@@ -240,6 +287,11 @@ class CatalogQualityGraph:
                 review_task_id=None,
                 reason=state["policy"].reason,
             )
+            self.recorder.record_trace(
+                workflow_run_id=state["workflow_run_id"],
+                trace=human_trace,
+                input_summary={"decision": state["policy"].decision},
+            )
         traces = [
             state["classifier_trace"],
             state["extraction_trace"],
@@ -247,21 +299,27 @@ class CatalogQualityGraph:
             state["policy_trace"],
             human_trace,
         ]
-        decision = self.decision_agent.run(
-            listing=state["listing"],
-            listing_id=state["listing_id"],
-            prediction=state["prediction"],
-            policy=state["policy"],
-            review_task_id=state.get("review_task_id"),
-            agent_trace=traces,
+        decision, _ = self.recorder.run(
+            workflow_run_id=state["workflow_run_id"],
+            agent_name="decision_agent",
+            operation=lambda: self.decision_agent.run(
+                listing=state["listing"],
+                listing_id=state["listing_id"],
+                workflow_run_id=state["workflow_run_id"],
+                prediction=state["prediction"],
+                policy=state["policy"],
+                review_task_id=state.get("review_task_id"),
+                agent_trace=traces,
+            ),
+            trace_builder=lambda result: result.agent_trace[-1],
+            input_summary={
+                "decision": state["policy"].decision,
+                "review_task_id": state.get("review_task_id"),
+            },
         )
         return {"decision": decision}
 
-    def _sequential_analyze(self, listing: ListingInput) -> CatalogQualityDecision:
-        state: CatalogQualityState = {
-            "listing": listing,
-            "item": ProductInput(title=listing.title, description=listing.description),
-        }
+    def _sequential_analyze(self, state: CatalogQualityState) -> CatalogQualityDecision:
         for node in (
             self._node_classifier,
             self._node_extraction,
@@ -278,14 +336,41 @@ class CatalogQualityGraph:
         return state["decision"]
 
     def analyze(self, listing: ListingInput) -> CatalogQualityDecision:
+        started = perf_counter()
+        workflow_run = self.store.start_workflow_run(
+            listing,
+            graph_backend=self.backend,
+        )
         graph_input: CatalogQualityState = {
             "listing": listing,
             "item": ProductInput(title=listing.title, description=listing.description),
+            "listing_id": workflow_run.listing_id,
+            "workflow_run_id": workflow_run.id,
         }
-        if self._graph is None:
-            return self._sequential_analyze(listing)
-        state = self._graph.invoke(graph_input)
-        return state["decision"]
+        try:
+            if self._graph is None:
+                decision = self._sequential_analyze(graph_input)
+            else:
+                state = self._graph.invoke(graph_input)
+                decision = state["decision"]
+            self.store.complete_workflow_run(
+                workflow_run.id,
+                decision=decision.decision,
+                risk_level=decision.risk_level,
+                duration_ms=(perf_counter() - started) * 1000,
+            )
+            return decision
+        except Exception as exc:
+            try:
+                self.store.fail_workflow_run(
+                    workflow_run.id,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
+                    duration_ms=(perf_counter() - started) * 1000,
+                )
+            except Exception:
+                pass
+            raise
 
     def diagnostics(self) -> dict[str, object]:
         return {

@@ -9,6 +9,8 @@ You submit a product title and description, and specialized agents coordinate to
 - reliability metadata,
 - and either an automatic acceptance decision or a human-review task.
 
+Each analysis also receives a durable workflow ID so agent timing, degradation, outputs, and failures remain queryable after the request completes.
+
 For implementation details, runtime knobs, diagnostics fields, CI workflows, and architecture, see [TECHNICAL.md](TECHNICAL.md).
 
 ## Quick start

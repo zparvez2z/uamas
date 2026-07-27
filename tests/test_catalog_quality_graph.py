@@ -31,12 +31,14 @@ class StubStagePipeline:
         semantic_score: float | None = 0.8,
         semantic_status: str = "ok",
         extraction_runtime: str = "MOCK",
+        fail_extraction: bool = False,
     ) -> None:
         self.confidence = confidence
         self.category_set = category_set if category_set is not None else ["Shoes"]
         self.semantic_score = semantic_score
         self.semantic_status = semantic_status
         self.extraction_runtime = extraction_runtime
+        self.fail_extraction = fail_extraction
         self.classify_calls = 0
         self.extract_calls = 0
         self.semantic_calls = 0
@@ -82,6 +84,8 @@ class StubStagePipeline:
 
     def extract_attributes(self, item: ProductInput) -> AttributeExtractionStageResult:
         self.extract_calls += 1
+        if self.fail_extraction:
+            raise RuntimeError("extraction failed")
         return AttributeExtractionStageResult(
             attributes=ProductAttributes(
                 brand="Acme",
@@ -161,6 +165,7 @@ def test_catalog_graph_auto_accepts_with_one_call_per_specialist(tmp_path: Path)
     assert decision.decision == "auto_accept"
     assert decision.risk_level == "low"
     assert decision.review_task_id is None
+    assert decision.workflow_run_id is not None
     assert pipeline.classify_calls == 1
     assert pipeline.extract_calls == 1
     assert pipeline.semantic_calls == 1
@@ -175,6 +180,15 @@ def test_catalog_graph_auto_accepts_with_one_call_per_specialist(tmp_path: Path)
     ]
     assert decision.agent_trace[-2].status == "skipped"
     assert store.diagnostics()["review_task_count"] == 0
+    history = store.get_workflow_run_detail(decision.workflow_run_id)
+    assert history is not None
+    assert history.status == "completed"
+    assert history.decision == "auto_accept"
+    assert history.prediction_id is not None
+    assert len(history.agent_runs) == 6
+    statuses = {run.agent_name: run.status for run in history.agent_runs}
+    assert statuses["human_review_agent"] == "skipped"
+    assert statuses["decision_agent"] == "completed"
 
 
 def test_catalog_graph_routes_low_confidence_to_human_review(tmp_path: Path) -> None:
@@ -192,6 +206,10 @@ def test_catalog_graph_routes_low_confidence_to_human_review(tmp_path: Path) -> 
     assert task.reason == "low_confidence"
     human_trace = next(trace for trace in decision.agent_trace if trace.agent == "human_review_agent")
     assert human_trace.status == "created"
+    workflow = store.get_workflow_run(decision.workflow_run_id)
+    assert workflow is not None
+    assert workflow.status == "completed"
+    assert workflow.review_task_id == decision.review_task_id
 
 
 def test_catalog_graph_ignores_degraded_semantic_score_for_policy(tmp_path: Path) -> None:
@@ -273,3 +291,30 @@ def test_attribute_agent_trace_marks_live_fallback_as_degraded() -> None:
 
     assert trace.status == "degraded"
     assert trace.reason == "provider_failed"
+
+
+def test_catalog_graph_persists_failed_workflow_and_agent(tmp_path: Path) -> None:
+    pipeline = StubStagePipeline(fail_extraction=True)
+    graph, store, _ = _build_graph(tmp_path, pipeline)
+    graph._graph = None
+    graph.available = False
+    graph.backend = "sequential"
+    graph.reason = "test_fallback"
+
+    try:
+        graph.analyze(ListingInput(title="Broken listing", description="description"))
+        assert False, "expected extraction failure"
+    except RuntimeError as exc:
+        assert str(exc) == "extraction failed"
+
+    workflows = store.list_workflow_runs()
+    assert len(workflows) == 1
+    assert workflows[0].status == "failed"
+    assert workflows[0].error_type == "RuntimeError"
+    agent_runs = store.list_agent_runs(workflows[0].id)
+    assert [run.agent_name for run in agent_runs] == [
+        "classifier_agent",
+        "attribute_extraction_agent",
+    ]
+    assert agent_runs[0].status == "completed"
+    assert agent_runs[1].status == "failed"

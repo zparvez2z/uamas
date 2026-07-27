@@ -73,6 +73,21 @@
     </section>
 
     <section class="card dashboard-span">
+      <h2>Workflow History</h2>
+      <div class="diagnostics-grid">
+        <div><span>Total runs</span><strong>{{ metrics.workflow_run_count }}</strong></div>
+        <div><span>Completed</span><strong>{{ metrics.completed_workflow_run_count }}</strong></div>
+        <div><span>Failed</span><strong>{{ metrics.failed_workflow_run_count }}</strong></div>
+        <div><span>Running</span><strong>{{ metrics.running_workflow_run_count }}</strong></div>
+        <div><span>Success rate</span><strong>{{ metrics.workflow_success_rate }}</strong></div>
+        <div><span>Average duration (ms)</span><strong>{{ metrics.average_workflow_duration_ms }}</strong></div>
+        <div><span>P95 duration (ms)</span><strong>{{ metrics.p95_workflow_duration_ms }}</strong></div>
+        <div><span>Degraded agent runs</span><strong>{{ metrics.degraded_agent_run_count }}</strong></div>
+        <div><span>Failed agent runs</span><strong>{{ metrics.failed_agent_run_count }}</strong></div>
+      </div>
+    </section>
+
+    <section class="card dashboard-span">
       <h2>Review Trigger Telemetry</h2>
       <div class="diagnostics-grid">
         <div><span>Trigger rate</span><strong>{{ diagnostics.review_graph_trigger_rate }}</strong></div>
@@ -113,6 +128,7 @@
       <div class="actions-row">
         <a class="link-btn" href="/diagnostics">Live Diagnostics JSON</a>
         <a class="link-btn" href="/api/metrics">Operational Metrics JSON</a>
+        <a class="link-btn" href="/api/workflow-runs">Workflow History JSON</a>
         <a class="link-btn" href="/artifacts/results.md">Latest Results (Markdown)</a>
         <a class="link-btn" href="/artifacts/results.json">Latest Results (JSON)</a>
       </div>

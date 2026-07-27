@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 
 from reliable_genai.catalog_quality_graph import CatalogQualityGraph
 from reliable_genai.models import (
+    AgentRun,
     CatalogQualityDecision,
     ListingInput,
     OperationalMetrics,
@@ -18,6 +19,8 @@ from reliable_genai.models import (
     ReviewDecision,
     ReviewQueueItem,
     ReviewTask,
+    WorkflowRun,
+    WorkflowRunDetail,
 )
 from reliable_genai.persistence import SQLiteReviewStore
 from reliable_genai.pipeline import ReliabilityPipeline
@@ -113,6 +116,8 @@ def build_diagnostics() -> dict:
         "listing_count": persistence_diagnostics.get("listing_count"),
         "review_task_count": persistence_diagnostics.get("review_task_count"),
         "pending_review_task_count": persistence_diagnostics.get("pending_review_task_count"),
+        "workflow_run_count": persistence_diagnostics.get("workflow_run_count"),
+        "failed_workflow_run_count": persistence_diagnostics.get("failed_workflow_run_count"),
     }
 
 
@@ -152,6 +157,16 @@ def build_operational_metrics() -> OperationalMetrics:
         classifier_runtime=str(pipeline.classifier.diagnostics().get("runtime")),
         review_graph_trigger_rate=review_diagnostics.get("review_graph_trigger_rate"),
         review_graph_second_pass_rate=review_diagnostics.get("review_graph_second_pass_rate"),
+        workflow_run_count=int(persistence_metrics["workflow_run_count"]),
+        completed_workflow_run_count=int(persistence_metrics["completed_workflow_run_count"]),
+        failed_workflow_run_count=int(persistence_metrics["failed_workflow_run_count"]),
+        running_workflow_run_count=int(persistence_metrics["running_workflow_run_count"]),
+        workflow_success_rate=float(persistence_metrics["workflow_success_rate"]),
+        average_workflow_duration_ms=float(persistence_metrics["average_workflow_duration_ms"]),
+        p95_workflow_duration_ms=float(persistence_metrics["p95_workflow_duration_ms"]),
+        degraded_agent_run_count=int(persistence_metrics["degraded_agent_run_count"]),
+        failed_agent_run_count=int(persistence_metrics["failed_agent_run_count"]),
+        average_agent_duration_ms=dict(persistence_metrics["average_agent_duration_ms"]),
     )
 
 
@@ -304,6 +319,39 @@ def list_review_queue(status: str = "pending", limit: int = 100) -> list[ReviewQ
         return review_store.list_review_tasks(status=status or None, limit=limit)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/workflow-runs", response_model=list[WorkflowRun])
+def list_workflow_runs(status: str = "", limit: int = 100) -> list[WorkflowRun]:
+    try:
+        return review_store.list_workflow_runs(
+            status=status or None,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/workflow-runs/{workflow_run_id}", response_model=WorkflowRunDetail)
+def get_workflow_run(workflow_run_id: str) -> WorkflowRunDetail:
+    workflow = review_store.get_workflow_run_detail(workflow_run_id)
+    if workflow is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"workflow run not found: {workflow_run_id}",
+        )
+    return workflow
+
+
+@app.get("/api/workflow-runs/{workflow_run_id}/agents", response_model=list[AgentRun])
+def list_workflow_agent_runs(workflow_run_id: str) -> list[AgentRun]:
+    workflow = review_store.get_workflow_run(workflow_run_id)
+    if workflow is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"workflow run not found: {workflow_run_id}",
+        )
+    return review_store.list_agent_runs(workflow_run_id)
 
 
 @app.get("/api/review-queue/{task_id}", response_model=ReviewTask)

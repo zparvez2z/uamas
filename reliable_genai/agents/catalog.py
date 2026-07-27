@@ -180,11 +180,13 @@ class HumanReviewAgent:
     def run(
         self,
         *,
+        workflow_run_id: str,
         listing_id: str,
         prediction_id: str,
         policy: WorkflowPolicyResult,
     ) -> str:
-        task = self.store.create_review_task(
+        task = self.store.create_review_task_for_workflow(
+            workflow_run_id,
             listing_id=listing_id,
             prediction_id=prediction_id,
             reason=policy.reason or "needs_human_review",
@@ -212,6 +214,7 @@ class DecisionAgent:
         *,
         listing: ListingInput,
         listing_id: str,
+        workflow_run_id: str,
         prediction: PredictionResponse,
         policy: WorkflowPolicyResult,
         review_task_id: str | None,
@@ -232,6 +235,7 @@ class DecisionAgent:
         ]
         return CatalogQualityDecision(
             listing_id=listing_id,
+            workflow_run_id=workflow_run_id,
             decision=policy.decision,
             risk_level=policy.risk_level,
             explanation=policy.explanation,
