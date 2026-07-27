@@ -17,6 +17,10 @@
       <div class="actions-row">
         <a class="link-btn" href="/">Back to Demo</a>
         <a class="link-btn" href="/review">Review Queue</a>
+        <form method="post" action="/admin/logout" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="link-btn">Sign Out</button>
+        </form>
       </div>
     </section>
 

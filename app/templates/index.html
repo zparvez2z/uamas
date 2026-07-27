@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reliable GenAI Demo</title>
+  <title>UAMAS Catalog Quality Assistant</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <main class="container">
     <section class="card">
       <div class="header-row">
-        <h1>Reliable GenAI Demo</h1>
+        <h1>UAMAS Catalog Quality Assistant</h1>
         <span class="runtime-badge runtime-{{ runtime|lower }}">{{ runtime }}</span>
       </div>
       <p class="subtitle">Uncertainty-aware prediction with conformal-style set output</p>
@@ -18,6 +18,10 @@
       <div class="actions-row">
         <a class="link-btn" href="/dashboard">Open Reliability Dashboard</a>
         <a class="link-btn" href="/review">Open Review Queue</a>
+        <form method="post" action="/admin/logout" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="link-btn">Sign Out</button>
+        </form>
       </div>
 
       <div class="diagnostics-panel">
@@ -35,6 +39,7 @@
       </div>
 
       <form method="post" action="/predict">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label for="title">Product Title</label>
         <input id="title" name="title" type="text" required value="{{ title }}" placeholder="e.g., Men's black running shoes size 42">
 

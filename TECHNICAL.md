@@ -48,6 +48,8 @@ How to read the diagram:
 - Calibrated prediction sets, abstention, semantic consistency scoring, and graceful provider fallback.
 - Explicit classifier, extraction, semantic critic, policy, human review, and decision agents.
 - SQLite-backed listings, predictions, review tasks, workflow runs, and per-agent execution history.
+- Production fail-closed authentication, signed admin sessions, bearer API access, CSRF protection, security headers, and bounded request bodies.
+- Audited workflow-history retention with dry-run preview, pre-change backup, bounded pruning, and optional vacuum.
 - Browser and JSON review interfaces, operational metrics, diagnostics, dashboard, CI, and live smoke verification.
 
 **Next planned**
@@ -56,9 +58,7 @@ How to read the diagram:
 - Prepare versioned retraining inputs while keeping artifact promotion explicit and evaluation-gated.
 
 **Proposed after the feedback loop**
-- Workflow-history retention and cleanup policies.
-- Authentication and authorization for operational endpoints.
-- Secret-scanning and production security hardening.
+- Deployment-specific backup restoration drills and operational monitoring.
 - Async provider clients and distributed workflow execution when measured load justifies them.
 
 ### Runtime components
@@ -70,6 +70,8 @@ How to read the diagram:
 - `reliable_genai/llm_wrappers.py` handles GitHub Models access, mock mode, and fallback extraction.
 - `reliable_genai/persistence.py` owns SQLite schema and repository operations for listings, predictions, review tasks, workflow runs, and agent runs.
 - `reliable_genai/workflow_history.py` records bounded per-agent summaries, durations, degradation, and failures.
+- `reliable_genai/security.py` owns production configuration validation, admin sessions, API bearer authentication, CSRF checks, and response hardening.
+- `reliable_genai/maintenance.py` owns retention policy resolution and audited cleanup orchestration.
 - `reliable_genai/runtime_profile.py` resolves classifier-critical runtime defaults and precedence.
 - `reliable_genai/models.py` defines the Pydantic request and response models.
 
@@ -183,6 +185,26 @@ How to read the diagram:
 - Records completed, degraded, skipped, and failed states with durations.
 - Preserves the original exception after recording a failed agent run.
 
+### `reliable_genai/security.py`
+- Keeps local development authentication disabled unless explicitly enabled.
+- Forces authentication and validates distinct strong secrets in production.
+- Signs short-lived administrator session cookies and validates bearer API tokens.
+- Provides CSRF validation for browser form writes and constant-time secret comparisons.
+- Applies security headers and no-store caching to sensitive responses.
+
+### `reliable_genai/maintenance.py`
+- Resolves conservative retention defaults from environment variables.
+- Previews eligible workflow history without changing operational records.
+- Creates a SQLite backup before applied cleanup.
+- Prunes detailed agent history and workflow error text while preserving workflow summaries.
+- Preserves running workflows, pending reviews, and all resolved review evidence.
+- Records successful and failed attempts in `maintenance_runs`.
+
+### `scripts/cleanup_operational_data.py`
+- Runs in dry-run mode unless `--apply` is supplied.
+- Supports deterministic `--now`, database-path override, and optional `--vacuum`.
+- Prints a structured cleanup report for operational evidence.
+
 ## 6) Reliability Metadata
 The response includes:
 - `alpha`
@@ -216,7 +238,7 @@ These fields make the behavior explainable during a review or demo and also supp
 - selected model,
 - endpoint,
 - whether a token is present,
-- a masked token prefix,
+- active security environment and whether authentication is enabled,
 - the last runtime path used by the pipeline,
 - classifier runtime source (`ARTIFACT`, `TRAINED`, or `FALLBACK`),
 - whether artifact loading was attempted,
@@ -229,7 +251,7 @@ These fields make the behavior explainable during a review or demo and also supp
 - classifier artifact path,
 - and the active calibrated coverage threshold.
 
-This is intended for quick pre-demo verification and for confirming whether a call hit live GitHub Models or the fallback path.
+The endpoint is protected whenever authentication is enabled. It does not expose token values or token prefixes.
 
 Healthy live mode indicators:
 - `token_present: true`,
@@ -269,6 +291,24 @@ Behavior flags:
 - `SEMANTIC_CONSISTENCY_THRESHOLD` (default `0.4`, semantic review trigger threshold)
 - `SEMANTIC_MAX_RETRIES` (default `1`)
 - `UAMAS_DB_PATH` (default `data/uamas.db`, SQLite persistence path)
+
+Security:
+- `UAMAS_ENV` (`development` default; `production` forces authentication)
+- `UAMAS_AUTH_ENABLED` (optional local/test authentication switch)
+- `UAMAS_ADMIN_TOKEN` (browser administrator credential)
+- `UAMAS_API_TOKEN` (machine API bearer credential)
+- `UAMAS_SESSION_SECRET` (administrator session-signing secret)
+- `UAMAS_COOKIE_SECURE` (`true` is mandatory in production)
+- `UAMAS_SESSION_TTL_SECONDS` (default `28800`)
+- `UAMAS_MAX_REQUEST_BYTES` (default `1000000`)
+- `UAMAS_ALLOWED_HOSTS` (comma-separated and mandatory in production)
+
+Retention and cleanup:
+- `WORKFLOW_RETENTION_DAYS` (default `90`)
+- `RESOLVED_REVIEW_RETENTION_DAYS` (must remain `0` until feedback export tracking exists)
+- `CLEANUP_BATCH_SIZE` (default `500`)
+- `CLEANUP_BACKUP_ENABLED` (default `true`)
+- `CLEANUP_BACKUP_DIR` (default `data/backups`)
 
 Classifier-critical precedence across app and scripts:
 - CLI args (when available) > explicit env vars > runtime profile > hardcoded defaults.
@@ -312,15 +352,19 @@ reliable_genai/
   classifier.py
   evaluation.py
   llm_wrappers.py
+  maintenance.py
   models.py
   pipeline.py
   persistence.py
   review_graph.py
   runtime_profile.py
   scoring.py
+  security.py
   semantic_scorer.py
   workflow_history.py
 scripts/
+  check_secrets.py
+  cleanup_operational_data.py
   evaluate.py
   ingest_real_products.py
   live_smoke.py
@@ -342,17 +386,28 @@ The project now uses processed public Shopify product catalogue data for trainin
 4. Produce a versioned JSONL or CSV retraining-input artifact with source metadata.
 5. Keep retraining and artifact promotion manual until an evaluation comparison passes defined guardrails.
 
-### Then: operational durability
-- Add configurable retention for workflow and agent history.
-- Add cleanup as an explicit command or scheduled maintenance task.
-- Back up or migrate SQLite before enforcing destructive retention in a deployed environment.
-- Measure database growth and query latency before introducing a larger database.
+### Implemented production baseline
+- Production fails startup when authentication secrets or allowed hosts are missing.
+- Browser operations use a signed administrator session and CSRF-protected writes.
+- Machine APIs use a distinct bearer token.
+- Diagnostics, metrics, review data, workflow history, and artifacts are protected.
+- Cleanup is explicit, dry-run by default, audited, and backed up before pruning.
+- CI scans tracked files for secrets and audits Python dependencies.
 
-### Before public deployment
-- Protect `/dashboard`, `/diagnostics`, `/review`, metrics, and workflow-history endpoints with authentication and authorization.
-- Remove token-prefix disclosure from public diagnostics.
-- Add `SECURITY.md`, secret scanning, and documented secret-rotation procedures.
-- Define deployment, backup, recovery, and migration procedures.
+Cleanup workflow:
+```bash
+.venv/bin/python scripts/cleanup_operational_data.py
+.venv/bin/python scripts/cleanup_operational_data.py --apply
+.venv/bin/python scripts/cleanup_operational_data.py --apply --vacuum
+```
+
+The first command only previews eligible data. Applied cleanup removes detailed agent rows and clears old workflow error text while retaining workflow summaries and review evidence.
+
+### Remaining deployment work
+- Exercise backup restoration and document recovery-time expectations for the chosen host.
+- Put the application behind TLS and deployment-level request throttling.
+- Connect alerts to authentication failures, provider degradation, database growth, and failed maintenance runs.
+- Measure database growth and query latency before introducing a larger database.
 
 ### Scale only when measurements require it
 - Replace synchronous provider calls with async clients and bounded timeouts.

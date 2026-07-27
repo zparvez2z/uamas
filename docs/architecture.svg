@@ -144,5 +144,5 @@
   <text class="section" x="50" y="1460">5. Next planned: human-feedback evidence loop</text>
   <rect class="planned" x="50" y="1480" width="1100" height="70" rx="8"/>
   <text class="note" x="75" y="1522">Resolved reviews  |  validated export  |  correction analytics  |  versioned retraining input  |  evaluation-gated promotion</text>
-  <text class="note" x="50" y="1585">Later production work: retention, endpoint authentication, secret hardening, async providers, and distributed execution.</text>
+  <text class="note" x="50" y="1585">Production baseline includes authentication, CSRF, secret scanning, and audited retention. Later: TLS deployment, restore drills, async providers, and distributed execution.</text>
 </svg>

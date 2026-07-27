@@ -1,13 +1,15 @@
 import json
 import os
+import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, Request
 from fastapi import HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from reliable_genai.catalog_quality_graph import CatalogQualityGraph
 from reliable_genai.models import (
@@ -25,10 +27,26 @@ from reliable_genai.models import (
 from reliable_genai.persistence import SQLiteReviewStore
 from reliable_genai.pipeline import ReliabilityPipeline
 from reliable_genai.review_graph import ReviewGraphRunner
+from reliable_genai.security import (
+    AdminLoginRequired,
+    SecurityManager,
+    SecuritySettings,
+)
 
 load_dotenv()
 
-app = FastAPI(title="Reliable GenAI Demo")
+security = SecurityManager(SecuritySettings.from_env())
+app = FastAPI(
+    title="UAMAS Catalog Quality Assistant",
+    docs_url="/docs" if security.settings.docs_enabled else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if security.settings.docs_enabled else None,
+)
+if security.settings.allowed_hosts:
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=list(security.settings.allowed_hosts),
+    )
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
@@ -38,6 +56,71 @@ review_store = SQLiteReviewStore()
 catalog_quality_graph = CatalogQualityGraph(pipeline, review_graph, review_store)
 RESULTS_JSON_PATH = Path("reports/results.json")
 RESULTS_MD_PATH = Path("reports/results.md")
+
+
+def require_admin_access(request: Request) -> None:
+    security.require_admin(request)
+
+
+def require_api_access(request: Request) -> None:
+    security.require_api(request)
+
+
+def require_operator_access(request: Request) -> None:
+    security.require_operator(request)
+
+
+async def require_csrf_form(request: Request) -> None:
+    await security.require_csrf(request)
+
+
+@app.exception_handler(AdminLoginRequired)
+def admin_login_required(
+    _request: Request,
+    exc: AdminLoginRequired,
+) -> RedirectResponse:
+    return RedirectResponse(
+        url=security.login_redirect(exc.next_path),
+        status_code=303,
+    )
+
+
+@app.middleware("http")
+async def apply_security_controls(request: Request, call_next):
+    request_id = uuid.uuid4().hex
+    request.state.request_id = request_id
+    sensitive = not (
+        request.url.path == "/health"
+        or request.url.path.startswith("/static/")
+        or request.url.path.startswith("/admin/login")
+    )
+
+    def finalize(response):
+        security.add_response_headers(response, sensitive=sensitive)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            too_large = int(content_length) > security.settings.max_request_bytes
+        except ValueError:
+            return finalize(
+                JSONResponse(
+                    {"detail": "invalid Content-Length"},
+                    status_code=400,
+                )
+            )
+        if too_large:
+            return finalize(
+                JSONResponse(
+                    {"detail": "request body too large"},
+                    status_code=413,
+                )
+            )
+
+    response = await call_next(request)
+    return finalize(response)
 
 
 def current_catalog_quality_graph() -> CatalogQualityGraph:
@@ -69,7 +152,8 @@ def build_diagnostics() -> dict:
         "model": pipeline.llm.model,
         "endpoint": pipeline.llm.endpoint,
         "token_present": bool(token),
-        "token_prefix": token[:8] + "..." if token else None,
+        "security_environment": security.settings.environment,
+        "authentication_enabled": security.enabled,
         "last_runtime": pipeline.llm.last_runtime,
         "llm_last_error": pipeline.llm.last_error,
         "classifier_runtime": classifier_diagnostics["runtime"],
@@ -192,7 +276,58 @@ def parse_corrected_attributes(raw: str | None) -> dict[str, object]:
     return parsed
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/admin/login", response_class=HTMLResponse)
+def admin_login_page(
+    request: Request,
+    next: str = "/",
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "login.html",
+        {
+            "error": None,
+            "next_path": security.safe_next_path(next),
+        },
+    )
+
+
+@app.post("/admin/login", response_model=None)
+def admin_login(
+    request: Request,
+    admin_token: str = Form(...),
+    next_path: str = Form("/"),
+) -> RedirectResponse | HTMLResponse:
+    safe_next = security.safe_next_path(next_path)
+    if not security.authenticate_admin_token(admin_token):
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {
+                "error": "Invalid administrator token.",
+                "next_path": safe_next,
+            },
+            status_code=401,
+        )
+    response = RedirectResponse(url=safe_next, status_code=303)
+    security.issue_admin_cookie(response)
+    return response
+
+
+@app.post(
+    "/admin/logout",
+    dependencies=[Depends(require_admin_access), Depends(require_csrf_form)],
+)
+def admin_logout() -> RedirectResponse:
+    response = RedirectResponse(url="/admin/login", status_code=303)
+    security.clear_admin_cookie(response)
+    return response
+
+
+@app.get(
+    "/",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_admin_access)],
+)
 def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
@@ -205,11 +340,16 @@ def index(request: Request) -> HTMLResponse:
             "runtime": "MOCK" if pipeline.llm.use_mock else "LIVE",
             "model": pipeline.llm.model,
             "diagnostics": build_diagnostics(),
+            "csrf_token": security.csrf_token(request),
         },
     )
 
 
-@app.post("/predict", response_class=HTMLResponse)
+@app.post(
+    "/predict",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_admin_access), Depends(require_csrf_form)],
+)
 def predict(
     request: Request,
     title: str = Form(...),
@@ -230,6 +370,7 @@ def predict(
                 "runtime": prediction.reliability.llm_runtime,
                 "model": prediction.reliability.llm_model,
                 "diagnostics": build_diagnostics(),
+                "csrf_token": security.csrf_token(request),
             },
         )
     except Exception as exc:
@@ -240,10 +381,15 @@ def predict(
                 "result": None,
                 "title": title,
                 "description": description,
-                "error": str(exc),
+                "error": (
+                    f"Request failed. Reference: {request.state.request_id}"
+                    if security.settings.production
+                    else str(exc)
+                ),
                 "runtime": "MOCK" if pipeline.llm.use_mock else "LIVE",
                 "model": pipeline.llm.model,
                 "diagnostics": build_diagnostics(),
+                "csrf_token": security.csrf_token(request),
             },
             status_code=400,
         )
@@ -254,17 +400,25 @@ def health() -> dict:
     return {"status": "ok"}
 
 
-@app.get("/diagnostics")
+@app.get("/diagnostics", dependencies=[Depends(require_operator_access)])
 def diagnostics() -> dict:
     return build_diagnostics()
 
 
-@app.get("/api/metrics", response_model=OperationalMetrics)
+@app.get(
+    "/api/metrics",
+    response_model=OperationalMetrics,
+    dependencies=[Depends(require_operator_access)],
+)
 def api_metrics() -> OperationalMetrics:
     return build_operational_metrics()
 
 
-@app.get("/review", response_class=HTMLResponse)
+@app.get(
+    "/review",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_admin_access)],
+)
 def review_queue_page(request: Request, status: str = "pending", limit: int = 100) -> HTMLResponse:
     selected_status = None if status == "all" else status
     try:
@@ -282,11 +436,15 @@ def review_queue_page(request: Request, status: str = "pending", limit: int = 10
             "limit": limit,
             "error": error,
             "diagnostics": build_diagnostics(),
+            "csrf_token": security.csrf_token(request),
         },
     )
 
 
-@app.post("/review/{task_id}/decision")
+@app.post(
+    "/review/{task_id}/decision",
+    dependencies=[Depends(require_admin_access), Depends(require_csrf_form)],
+)
 def submit_review_task_decision(
     task_id: str,
     action: str = Form(...),
@@ -308,12 +466,20 @@ def submit_review_task_decision(
     return RedirectResponse(url="/review", status_code=303)
 
 
-@app.post("/api/listings/analyze", response_model=CatalogQualityDecision)
+@app.post(
+    "/api/listings/analyze",
+    response_model=CatalogQualityDecision,
+    dependencies=[Depends(require_api_access)],
+)
 def analyze_listing(listing: ListingInput) -> CatalogQualityDecision:
     return current_catalog_quality_graph().analyze(listing)
 
 
-@app.get("/api/review-queue", response_model=list[ReviewQueueItem])
+@app.get(
+    "/api/review-queue",
+    response_model=list[ReviewQueueItem],
+    dependencies=[Depends(require_operator_access)],
+)
 def list_review_queue(status: str = "pending", limit: int = 100) -> list[ReviewQueueItem]:
     try:
         return review_store.list_review_tasks(status=status or None, limit=limit)
@@ -321,7 +487,11 @@ def list_review_queue(status: str = "pending", limit: int = 100) -> list[ReviewQ
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.get("/api/workflow-runs", response_model=list[WorkflowRun])
+@app.get(
+    "/api/workflow-runs",
+    response_model=list[WorkflowRun],
+    dependencies=[Depends(require_operator_access)],
+)
 def list_workflow_runs(status: str = "", limit: int = 100) -> list[WorkflowRun]:
     try:
         return review_store.list_workflow_runs(
@@ -332,7 +502,11 @@ def list_workflow_runs(status: str = "", limit: int = 100) -> list[WorkflowRun]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.get("/api/workflow-runs/{workflow_run_id}", response_model=WorkflowRunDetail)
+@app.get(
+    "/api/workflow-runs/{workflow_run_id}",
+    response_model=WorkflowRunDetail,
+    dependencies=[Depends(require_operator_access)],
+)
 def get_workflow_run(workflow_run_id: str) -> WorkflowRunDetail:
     workflow = review_store.get_workflow_run_detail(workflow_run_id)
     if workflow is None:
@@ -343,7 +517,11 @@ def get_workflow_run(workflow_run_id: str) -> WorkflowRunDetail:
     return workflow
 
 
-@app.get("/api/workflow-runs/{workflow_run_id}/agents", response_model=list[AgentRun])
+@app.get(
+    "/api/workflow-runs/{workflow_run_id}/agents",
+    response_model=list[AgentRun],
+    dependencies=[Depends(require_operator_access)],
+)
 def list_workflow_agent_runs(workflow_run_id: str) -> list[AgentRun]:
     workflow = review_store.get_workflow_run(workflow_run_id)
     if workflow is None:
@@ -354,7 +532,11 @@ def list_workflow_agent_runs(workflow_run_id: str) -> list[AgentRun]:
     return review_store.list_agent_runs(workflow_run_id)
 
 
-@app.get("/api/review-queue/{task_id}", response_model=ReviewTask)
+@app.get(
+    "/api/review-queue/{task_id}",
+    response_model=ReviewTask,
+    dependencies=[Depends(require_operator_access)],
+)
 def get_review_task(task_id: str) -> ReviewTask:
     task = review_store.get_review_task(task_id)
     if task is None:
@@ -362,7 +544,11 @@ def get_review_task(task_id: str) -> ReviewTask:
     return task
 
 
-@app.post("/api/review-queue/{task_id}/decision", response_model=ReviewTask)
+@app.post(
+    "/api/review-queue/{task_id}/decision",
+    response_model=ReviewTask,
+    dependencies=[Depends(require_api_access)],
+)
 def record_review_task_decision(task_id: str, decision: ReviewDecision) -> ReviewTask:
     try:
         return review_store.record_review_decision(task_id, decision)
@@ -370,7 +556,11 @@ def record_review_task_decision(task_id: str, decision: ReviewDecision) -> Revie
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@app.get(
+    "/dashboard",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_admin_access)],
+)
 def dashboard(request: Request) -> HTMLResponse:
     diagnostics_payload = build_diagnostics()
     metrics_payload = build_operational_metrics()
@@ -383,18 +573,25 @@ def dashboard(request: Request) -> HTMLResponse:
             "metrics": metrics_payload,
             "artifact": artifact,
             "artifact_error": artifact_error,
+            "csrf_token": security.csrf_token(request),
         },
     )
 
 
-@app.get("/artifacts/results.json")
+@app.get(
+    "/artifacts/results.json",
+    dependencies=[Depends(require_operator_access)],
+)
 def artifact_results_json() -> FileResponse:
     if not RESULTS_JSON_PATH.exists():
         raise HTTPException(status_code=404, detail=f"{RESULTS_JSON_PATH} not found")
     return FileResponse(RESULTS_JSON_PATH, media_type="application/json", filename="results.json")
 
 
-@app.get("/artifacts/results.md")
+@app.get(
+    "/artifacts/results.md",
+    dependencies=[Depends(require_operator_access)],
+)
 def artifact_results_md() -> FileResponse:
     if not RESULTS_MD_PATH.exists():
         raise HTTPException(status_code=404, detail=f"{RESULTS_MD_PATH} not found")

@@ -40,6 +40,16 @@ body {
   grid-template-columns: 1fr;
 }
 
+.login-container {
+  grid-template-columns: minmax(0, 460px);
+  align-content: center;
+  justify-content: center;
+}
+
+.login-card {
+  width: 100%;
+}
+
 .dashboard-span {
   grid-column: 1 / -1;
 }

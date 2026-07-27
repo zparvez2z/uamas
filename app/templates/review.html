@@ -18,6 +18,10 @@
         <a class="link-btn" href="/">Back to Demo</a>
         <a class="link-btn" href="/dashboard">Dashboard</a>
         <a class="link-btn" href="/api/review-queue">Queue JSON</a>
+        <form method="post" action="/admin/logout" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="link-btn">Sign Out</button>
+        </form>
       </div>
     </section>
 
@@ -62,17 +66,20 @@
         {% if task.status == "pending" %}
         <div class="review-actions">
           <form method="post" action="/review/{{ task.id }}/decision" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="action" value="approve">
             <button type="submit">Approve</button>
           </form>
 
           <form method="post" action="/review/{{ task.id }}/decision" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="action" value="reject">
             <button type="submit" class="danger-button">Reject</button>
           </form>
         </div>
 
         <form method="post" action="/review/{{ task.id }}/decision" class="correction-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="action" value="correct">
           <label for="corrected-category-{{ task.id }}">Corrected Category</label>
           <input

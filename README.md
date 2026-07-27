@@ -44,6 +44,8 @@ Implemented:
 - semantic consistency scoring using a second embedding model,
 - deterministic policy routing and a browser-based human-review queue,
 - durable SQLite workflow and per-agent execution history,
+- production fail-closed authentication and CSRF-protected review actions,
+- audited retention cleanup with dry-run preview and pre-change backups,
 - operational diagnostics, metrics, dashboard, and evaluation artifacts,
 - mock mode, live GitHub Models mode, automated CI, and a manual live smoke workflow.
 
@@ -108,6 +110,34 @@ USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload
 
 Check `/diagnostics` after a request to confirm whether the latest model call used `LIVE`, `MOCK`, or `FALLBACK_MOCK`.
 
+## Production Security
+
+Set `UAMAS_ENV=production` and provide distinct strong values for:
+- `UAMAS_ADMIN_TOKEN`
+- `UAMAS_API_TOKEN`
+- `UAMAS_SESSION_SECRET`
+- `UAMAS_ALLOWED_HOSTS`
+
+Production startup fails when this configuration is missing or unsafe. Browser operations use an administrator session; machine APIs require `Authorization: Bearer <UAMAS_API_TOKEN>`.
+
+See [SECURITY.md](SECURITY.md) for secret handling and deployment requirements.
+
+## Retention Cleanup
+
+Preview cleanup without changing workflow data:
+
+```bash
+.venv/bin/python scripts/cleanup_operational_data.py
+```
+
+Apply cleanup after reviewing the report:
+
+```bash
+.venv/bin/python scripts/cleanup_operational_data.py --apply
+```
+
+Applied cleanup creates a backup, prunes expired detailed agent history, and preserves workflow summaries and human-review evidence.
+
 ## Data
 
 The processed dataset comes from the public [Shopify Product Catalogue](https://huggingface.co/datasets/Shopify/product-catalogue).
@@ -138,6 +168,7 @@ Evaluation evidence is available in:
 ## Project Guide
 
 - [TECHNICAL.md](TECHNICAL.md): architecture, runtime behavior, configuration, reliability controls, and roadmap
+- [SECURITY.md](SECURITY.md): production access, secret handling, and vulnerability reporting
 - [plan.md](plan.md): phased product and engineering plan
 - [DEMO.md](DEMO.md): demonstration runbook
 - `app/`: FastAPI routes, templates, and operational interfaces

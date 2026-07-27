@@ -4,15 +4,15 @@ from pydantic import BaseModel, Field
 
 
 class ProductInput(BaseModel):
-    title: str = Field(min_length=1)
-    description: str = Field(default="")
+    title: str = Field(min_length=1, max_length=500)
+    description: str = Field(default="", max_length=10_000)
 
 
 class ProductAttributes(BaseModel):
-    brand: str = "unknown"
-    color: str = "unknown"
-    material: str = "unknown"
-    size: str = "unknown"
+    brand: str = Field(default="unknown", max_length=500)
+    color: str = Field(default="unknown", max_length=500)
+    material: str = Field(default="unknown", max_length=500)
+    size: str = Field(default="unknown", max_length=500)
 
 
 class ReliabilityMeta(BaseModel):
@@ -51,7 +51,7 @@ class PredictionResponse(BaseModel):
 
 
 class ListingInput(ProductInput):
-    external_id: Optional[str] = None
+    external_id: Optional[str] = Field(default=None, max_length=500)
 
 
 class AgentTrace(BaseModel):
@@ -95,9 +95,9 @@ class ReviewQueueItem(ReviewTask):
 
 class ReviewDecision(BaseModel):
     action: Literal["approve", "correct", "reject"]
-    corrected_category: Optional[str] = None
+    corrected_category: Optional[str] = Field(default=None, max_length=500)
     corrected_attributes: Dict[str, object] = Field(default_factory=dict)
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=4_000)
 
 
 class AgentRun(BaseModel):
@@ -132,6 +132,7 @@ class WorkflowRun(BaseModel):
     duration_ms: Optional[float] = None
     error_type: Optional[str] = None
     error_message: Optional[str] = None
+    history_pruned_at: Optional[str] = None
 
 
 class WorkflowRunDetail(WorkflowRun):

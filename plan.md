@@ -265,21 +265,31 @@ Future retraining promotion rule:
 4. Promote only if coverage does not regress and correction rate improves.
 
 ### Phase 6: Security + Production Hygiene
-Before any public deployment:
-- rotate exposed token,
-- remove token display/prefix from public diagnostics or protect diagnostics behind auth,
-- add `SECURITY.md`,
-- document required secrets,
-- add secret scanning/pre-commit check,
-- protect `/dashboard`, `/diagnostics`, and `/review` with simple admin auth.
+Status: **implemented for the first production baseline**.
 
-For local/demo:
-```text
-ENABLE_DEMO_MODE=true
-```
+Implemented:
+- production fail-closed configuration with distinct administrator, API, and session secrets,
+- signed administrator sessions and CSRF-protected browser writes,
+- bearer authentication for machine APIs,
+- protected dashboard, diagnostics, metrics, review, artifact, and workflow-history routes,
+- removal of token-prefix disclosure,
+- bounded request bodies, security headers, and sanitized production errors,
+- owner-only SQLite and backup file permissions where supported,
+- tracked-file secret scanning, dependency auditing, Dependabot, and `SECURITY.md`,
+- explicit retention cleanup with dry-run preview, pre-change backup, maintenance audit records, and optional vacuum.
 
-For real use:
-- require admin token or basic auth.
+Current retention behavior:
+- running workflows are preserved,
+- workflows attached to pending reviews are preserved,
+- old completed/failed workflow summaries are retained,
+- detailed agent rows and workflow error text are pruned after the configured retention period,
+- resolved review evidence is retained until feedback export tracking is implemented.
+
+Remaining deployment-specific work:
+- TLS and reverse-proxy request throttling,
+- backup restoration drills,
+- external alerting and log aggregation,
+- deployment and recovery runbooks for the selected host.
 
 ## Public Interfaces and Types
 

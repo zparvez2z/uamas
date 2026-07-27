@@ -105,6 +105,7 @@ class SQLiteReviewStore:
                     duration_ms REAL,
                     error_type TEXT,
                     error_message TEXT,
+                    history_pruned_at TEXT,
                     FOREIGN KEY(listing_id) REFERENCES listings(id),
                     FOREIGN KEY(prediction_id) REFERENCES predictions(id),
                     FOREIGN KEY(review_task_id) REFERENCES review_tasks(id)
@@ -134,8 +135,32 @@ class SQLiteReviewStore:
                     ON agent_runs(workflow_run_id, started_at);
                 CREATE INDEX IF NOT EXISTS idx_agent_runs_name_status
                     ON agent_runs(agent_name, status);
+
+                CREATE TABLE IF NOT EXISTS maintenance_runs (
+                    id TEXT PRIMARY KEY,
+                    operation TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    dry_run INTEGER NOT NULL,
+                    cutoff_at TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    details_json TEXT NOT NULL DEFAULT '{}',
+                    error_message TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_maintenance_runs_started
+                    ON maintenance_runs(started_at DESC);
                 """
             )
+            workflow_columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(workflow_runs)").fetchall()
+            }
+            if "history_pruned_at" not in workflow_columns:
+                conn.execute(
+                    "ALTER TABLE workflow_runs ADD COLUMN history_pruned_at TEXT"
+                )
+        self._set_private_file_permissions(self.db_path)
 
     def create_listing(self, listing: ListingInput) -> str:
         listing_id = self._new_id("lst")
@@ -617,6 +642,236 @@ class SQLiteReviewStore:
             raise KeyError(f"review task not found: {task_id}")
         return task
 
+    def start_maintenance_run(
+        self,
+        *,
+        operation: str,
+        dry_run: bool,
+        cutoff_at: str,
+    ) -> str:
+        maintenance_id = self._new_id("mnt")
+        with self._write_lock:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO maintenance_runs (
+                        id,
+                        operation,
+                        status,
+                        dry_run,
+                        cutoff_at,
+                        started_at,
+                        details_json
+                    )
+                    VALUES (?, ?, 'running', ?, ?, ?, '{}')
+                    """,
+                    (
+                        maintenance_id,
+                        operation,
+                        int(dry_run),
+                        cutoff_at,
+                        utc_now(),
+                    ),
+                )
+        return maintenance_id
+
+    def finish_maintenance_run(
+        self,
+        maintenance_id: str,
+        *,
+        status: str,
+        details: dict[str, object],
+        error_message: str | None = None,
+    ) -> None:
+        if status not in {"completed", "failed"}:
+            raise ValueError(f"invalid maintenance status: {status}")
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE maintenance_runs
+                    SET
+                        status = ?,
+                        completed_at = ?,
+                        details_json = ?,
+                        error_message = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        status,
+                        utc_now(),
+                        json.dumps(details, sort_keys=True),
+                        self._bounded_error(error_message) if error_message else None,
+                        maintenance_id,
+                    ),
+                )
+        if cursor.rowcount == 0:
+            raise KeyError(f"maintenance run not found: {maintenance_id}")
+
+    def get_maintenance_run(self, maintenance_id: str) -> dict[str, object] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM maintenance_runs WHERE id = ?",
+                (maintenance_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row["id"],
+            "operation": row["operation"],
+            "status": row["status"],
+            "dry_run": bool(row["dry_run"]),
+            "cutoff_at": row["cutoff_at"],
+            "started_at": row["started_at"],
+            "completed_at": row["completed_at"],
+            "details": json.loads(row["details_json"]),
+            "error_message": row["error_message"],
+        }
+
+    def preview_workflow_history_cleanup(self, *, cutoff_at: str) -> dict[str, int]:
+        eligible_query = """
+            FROM workflow_runs
+            LEFT JOIN review_tasks
+                ON review_tasks.id = workflow_runs.review_task_id
+            WHERE workflow_runs.status IN ('completed', 'failed')
+              AND workflow_runs.completed_at IS NOT NULL
+              AND workflow_runs.completed_at < ?
+              AND workflow_runs.history_pruned_at IS NULL
+              AND (
+                    review_tasks.id IS NULL
+                    OR review_tasks.status != 'pending'
+              )
+        """
+        with self._connect() as conn:
+            workflow_count = int(
+                conn.execute(
+                    f"SELECT COUNT(*) {eligible_query}",
+                    (cutoff_at,),
+                ).fetchone()[0]
+            )
+            agent_count = int(
+                conn.execute(
+                    f"""
+                    SELECT COUNT(*)
+                    FROM agent_runs
+                    WHERE workflow_run_id IN (
+                        SELECT workflow_runs.id
+                        {eligible_query}
+                    )
+                    """,
+                    (cutoff_at,),
+                ).fetchone()[0]
+            )
+            pending_review_count = int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM review_tasks WHERE status = 'pending'"
+                ).fetchone()[0]
+            )
+            resolved_review_count = int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM review_tasks WHERE status != 'pending'"
+                ).fetchone()[0]
+            )
+        return {
+            "eligible_workflow_runs": workflow_count,
+            "eligible_agent_runs": agent_count,
+            "preserved_pending_reviews": pending_review_count,
+            "preserved_resolved_reviews": resolved_review_count,
+        }
+
+    def prune_workflow_history_batch(
+        self,
+        *,
+        cutoff_at: str,
+        batch_size: int,
+    ) -> dict[str, int]:
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        pruned_at = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT workflow_runs.id
+                    FROM workflow_runs
+                    LEFT JOIN review_tasks
+                        ON review_tasks.id = workflow_runs.review_task_id
+                    WHERE workflow_runs.status IN ('completed', 'failed')
+                      AND workflow_runs.completed_at IS NOT NULL
+                      AND workflow_runs.completed_at < ?
+                      AND workflow_runs.history_pruned_at IS NULL
+                      AND (
+                            review_tasks.id IS NULL
+                            OR review_tasks.status != 'pending'
+                      )
+                    ORDER BY workflow_runs.completed_at
+                    LIMIT ?
+                    """,
+                    (cutoff_at, batch_size),
+                ).fetchall()
+                workflow_ids = [row["id"] for row in rows]
+                if not workflow_ids:
+                    return {
+                        "workflow_runs_pruned": 0,
+                        "agent_runs_deleted": 0,
+                        "workflow_errors_cleared": 0,
+                    }
+
+                placeholders = ",".join("?" for _ in workflow_ids)
+                agent_cursor = conn.execute(
+                    f"""
+                    DELETE FROM agent_runs
+                    WHERE workflow_run_id IN ({placeholders})
+                    """,
+                    workflow_ids,
+                )
+                error_count = int(
+                    conn.execute(
+                        f"""
+                        SELECT COUNT(*)
+                        FROM workflow_runs
+                        WHERE id IN ({placeholders})
+                          AND error_message IS NOT NULL
+                        """,
+                        workflow_ids,
+                    ).fetchone()[0]
+                )
+                workflow_cursor = conn.execute(
+                    f"""
+                    UPDATE workflow_runs
+                    SET history_pruned_at = ?, error_message = NULL
+                    WHERE id IN ({placeholders})
+                    """,
+                    (pruned_at, *workflow_ids),
+                )
+        return {
+            "workflow_runs_pruned": int(workflow_cursor.rowcount),
+            "agent_runs_deleted": int(agent_cursor.rowcount),
+            "workflow_errors_cleared": error_count,
+        }
+
+    def backup_to(self, destination: str | Path) -> Path:
+        backup_path = Path(destination)
+        if backup_path.resolve() == self.db_path.resolve():
+            raise ValueError("backup destination must differ from the active database")
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._write_lock:
+            source = self._connect()
+            destination_conn = sqlite3.connect(backup_path)
+            try:
+                source.backup(destination_conn)
+            finally:
+                destination_conn.close()
+                source.close()
+        self._set_private_file_permissions(backup_path)
+        return backup_path
+
+    def vacuum(self) -> None:
+        with self._write_lock:
+            with self._connect() as conn:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                conn.execute("VACUUM")
+
     def metrics(self) -> dict[str, object]:
         try:
             with self._connect() as conn:
@@ -890,11 +1145,24 @@ class SQLiteReviewStore:
     @staticmethod
     def _bounded_error(message: str, limit: int = 1000) -> str:
         sanitized = message
-        for env_name in ("GITHUB_TOKEN", "GITHUB_MODELS_API_KEY"):
+        for env_name in (
+            "GITHUB_TOKEN",
+            "GITHUB_MODELS_API_KEY",
+            "UAMAS_ADMIN_TOKEN",
+            "UAMAS_API_TOKEN",
+            "UAMAS_SESSION_SECRET",
+        ):
             secret = os.getenv(env_name, "")
             if secret:
                 sanitized = sanitized.replace(secret, "[REDACTED]")
         return sanitized[:limit]
+
+    @staticmethod
+    def _set_private_file_permissions(path: Path) -> None:
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
 
     @staticmethod
     def _task_from_row(row: sqlite3.Row) -> ReviewTask:
@@ -928,6 +1196,7 @@ class SQLiteReviewStore:
             duration_ms=row["duration_ms"],
             error_type=row["error_type"],
             error_message=row["error_message"],
+            history_pruned_at=row["history_pruned_at"],
         )
 
     @staticmethod
