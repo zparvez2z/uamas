@@ -1,10 +1,21 @@
+import os
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from reliable_genai.classifier import CalibratedTextClassifier
-from reliable_genai.models import ClassifierResult, PredictionResponse, ProductAttributes, ReliabilityMeta
 from reliable_genai.evaluation import compute_metrics
+from reliable_genai.models import (
+    PRODUCT_DESCRIPTION_MAX_LENGTH,
+    PRODUCT_TITLE_MAX_LENGTH,
+    ClassifierResult,
+    PredictionResponse,
+    ProductAttributes,
+    ProductInput,
+    ReliabilityMeta,
+)
 from scripts import evaluate
-import os
 
 
 class FakeClassifier:
@@ -210,6 +221,27 @@ def test_select_evaluation_sample_spreads_across_dataset() -> None:
     sample = evaluate.select_evaluation_sample(rows, 3)
 
     assert [row["title"] for row in sample] == ["product 0", "product 2", "product 4"]
+
+
+def test_evaluation_bounds_legacy_oversized_product_text() -> None:
+    product = evaluate.product_input_from_row(
+        {
+            "title": "T" * (PRODUCT_TITLE_MAX_LENGTH + 10),
+            "description": "D" * (PRODUCT_DESCRIPTION_MAX_LENGTH + 10),
+            "category": "Shoes",
+        }
+    )
+
+    assert len(product.title) == PRODUCT_TITLE_MAX_LENGTH
+    assert len(product.description) == PRODUCT_DESCRIPTION_MAX_LENGTH
+
+
+def test_product_input_still_rejects_oversized_external_text() -> None:
+    with pytest.raises(ValidationError, match="description"):
+        ProductInput(
+            title="shoe",
+            description="D" * (PRODUCT_DESCRIPTION_MAX_LENGTH + 1),
+        )
 
 
 def test_run_evaluation_rejects_non_positive_sample_size(monkeypatch) -> None:

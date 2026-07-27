@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from reliable_genai import ProductInput, ReliabilityPipeline, ReviewGraphRunner
 from reliable_genai.evaluation import compute_metrics
+from reliable_genai.models import bound_product_text
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +37,14 @@ def load_labeled_dataset(path: Path = DEFAULT_TEST_PATH) -> list[dict[str, str]]
     if not isinstance(rows, list):
         raise ValueError(f"{path} must contain a JSON list")
     return rows
+
+
+def product_input_from_row(row: dict[str, str]) -> ProductInput:
+    title, description = bound_product_text(
+        title=str(row.get("title") or ""),
+        description=str(row.get("description") or ""),
+    )
+    return ProductInput(title=title, description=description)
 
 
 def select_evaluation_sample(rows: list[dict[str, str]], sample_size: int | None) -> list[dict[str, str]]:
@@ -180,10 +189,7 @@ def run_evaluation(
     sample_note = f" from {full_dataset_size}" if len(rows) != full_dataset_size else ""
     print(f"\n[INFO] Running labeled evaluation on {len(rows)}{sample_note} products...\n")
     for idx, row in enumerate(rows, 1):
-        product = ProductInput(
-            title=row["title"],
-            description=row.get("description", ""),
-        )
+        product = product_input_from_row(row)
         true_label = row["category"]
         print(f"[{idx}/{len(rows)}] Predicting: {product.title[:56]}")
 

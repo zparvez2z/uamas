@@ -3,9 +3,24 @@ from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
+PRODUCT_TITLE_MAX_LENGTH = 500
+PRODUCT_DESCRIPTION_MAX_LENGTH = 10_000
+
+
+def bound_product_text(*, title: str, description: str) -> tuple[str, str]:
+    """Bound trusted dataset text to the public product-input contract."""
+    return (
+        title[:PRODUCT_TITLE_MAX_LENGTH],
+        description[:PRODUCT_DESCRIPTION_MAX_LENGTH],
+    )
+
+
 class ProductInput(BaseModel):
-    title: str = Field(min_length=1, max_length=500)
-    description: str = Field(default="", max_length=10_000)
+    title: str = Field(min_length=1, max_length=PRODUCT_TITLE_MAX_LENGTH)
+    description: str = Field(
+        default="",
+        max_length=PRODUCT_DESCRIPTION_MAX_LENGTH,
+    )
 
 
 class ProductAttributes(BaseModel):

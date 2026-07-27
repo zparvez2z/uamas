@@ -5,6 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from reliable_genai.models import (
+    PRODUCT_DESCRIPTION_MAX_LENGTH,
+    PRODUCT_TITLE_MAX_LENGTH,
+)
 from scripts import ingest_real_products as ingest
 
 
@@ -67,6 +71,27 @@ def test_normalize_source_row_extracts_current_pipeline_contract() -> None:
     assert normalized["manufacturer"] == "Acme"
     assert normalized["colour"] == "Black"
     assert normalized["picture"] == "https://example.com/shoe.jpg"
+
+
+def test_normalize_source_row_bounds_oversized_product_text() -> None:
+    normalized, reason = ingest.normalize_source_row(
+        {
+            "product_title": "T" * (PRODUCT_TITLE_MAX_LENGTH + 10),
+            "product_description": (
+                "D" * (PRODUCT_DESCRIPTION_MAX_LENGTH + 10)
+            ),
+            "ground_truth_category": "Shoes",
+        },
+        1,
+    )
+
+    assert reason is None
+    assert normalized is not None
+    assert len(normalized["title"]) == PRODUCT_TITLE_MAX_LENGTH
+    assert (
+        len(normalized["description"])
+        == PRODUCT_DESCRIPTION_MAX_LENGTH
+    )
 
 
 def test_normalize_rows_filters_unmapped_and_caps_categories() -> None:

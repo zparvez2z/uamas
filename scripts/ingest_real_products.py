@@ -17,6 +17,7 @@ from typing import Any, Iterable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.load_dataset import SplitConfig, split_rows, write_json
+from reliable_genai.models import bound_product_text
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -120,6 +121,10 @@ def normalize_source_row(row: dict[str, Any], index: int) -> tuple[dict[str, str
                 "details",
             ),
         )
+    )
+    title, description = bound_product_text(
+        title=title,
+        description=description,
     )
     source_category = _first_present(
         row,
