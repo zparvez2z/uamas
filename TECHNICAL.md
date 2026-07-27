@@ -1,13 +1,18 @@
-# Technical Deep Dive: Reliable GenAI Demo
+# Technical Deep Dive: UAMAS
 
-This document is the implementation companion to the main [README.md](README.md). It describes the code structure, request flow, runtime behavior, and reliability controls used in the project.
+This document is the implementation companion to the main [README.md](README.md). It describes the current UAMAS architecture, request flows, runtime behavior, reliability controls, operational boundaries, and proposed engineering work.
 
 ## 1) System Goals
-The codebase implements a small but complete GenAI pipeline for product classification and structured extraction. The engineering goals are:
+UAMAS stands for **Uncertainty-Aware Multi-Agent System**. Its current product use case is catalog-quality analysis: classify a product, extract structured attributes, challenge the result semantically, route uncertain cases to a person, and preserve the evidence behind every decision.
+
+The engineering goals are:
 - produce a bounded prediction set instead of a forced single label when uncertainty is high,
+- coordinate explicit specialist agents with deterministic routing,
 - validate structured output with Pydantic before rendering it to the UI,
-- expose runtime diagnostics for live and demo verification,
-- and keep the integration layer simple enough to review quickly.
+- preserve workflow and per-agent execution history,
+- use human review as future training evidence,
+- expose runtime diagnostics for operational verification,
+- and remain usable when optional model services degrade.
 
 ## 2) Core Concepts
 ### Uncertainty-aware behavior
@@ -27,48 +32,34 @@ The practical effect is a tradeoff:
 The attribute extraction path uses GitHub Models via Azure AI Inference and validates the output with Pydantic. If the model output is malformed or the call fails, the pipeline falls back to the deterministic extractor in `GitHubModelsClient`.
 
 ## 3) Architecture
-```mermaid
-flowchart LR
-  U[Browser or API Client] --> API[FastAPI\napp/main.py]
-  API -->|POST /predict| RG[ReviewGraphRunner]
-  API -->|POST /api/listings/analyze| CQG[CatalogQualityGraph]
+![UAMAS system architecture](docs/architecture.svg)
 
-  CQG --> CA[Classifier Agent]
-  CQG --> EA[Attribute Extraction Agent]
-  CA --> SCA[Semantic Critic Agent]
-  EA --> PA[Policy Agent]
-  SCA --> PA
-  PA -->|auto accept| DA[Decision Agent]
-  PA -->|needs review| HRA[Human Review Agent]
-  HRA --> DA
+How to read the diagram:
+- The upper lane is the backward-compatible `/predict` path.
+- The central lane is the primary operational path and contains the explicit catalog-quality agents.
+- Shared model, artifact, and SQLite services support both request paths.
+- The operations column exposes review, diagnostics, metrics, dashboard, and durable workflow history.
+- Solid connections are implemented. The dashed feedback loop is proposed as the next engineering phase.
 
-  CA --> P[ReliabilityPipeline Stages]
-  EA --> P
-  SCA --> P
-  RG --> P
-  HRA --> DB[(SQLite Operational Store)]
-  CQG --> DB
-  DA --> O[CatalogQualityDecision]
-  API --> D[Diagnostics / Metrics / Dashboard]
-  DB --> D
+### Delivery status
+**Implemented now**
+- Real public catalog data ingestion and deterministic train/calibration/test splits.
+- A pinned classifier runtime profile and strict artifact compatibility handling.
+- Calibrated prediction sets, abstention, semantic consistency scoring, and graceful provider fallback.
+- Explicit classifier, extraction, semantic critic, policy, human review, and decision agents.
+- SQLite-backed listings, predictions, review tasks, workflow runs, and per-agent execution history.
+- Browser and JSON review interfaces, operational metrics, diagnostics, dashboard, CI, and live smoke verification.
 
-  subgraph Config[Environment / Runtime Configuration]
-    E1[.env]
-    E2[GITHUB_TOKEN]
-    E3[USE_MOCK_LLM]
-    E4[ALPHA]
-    E5[runtime_profile.json]
-    E6[ENABLE_LANGGRAPH_REVIEW]
-    E7[ENABLE_SEMANTIC_SCORER]
-    E8[UAMAS_DB_PATH]
-  end
+**Next planned**
+- Export resolved human reviews as validated feedback evidence.
+- Add correction metrics by category and review reason.
+- Prepare versioned retraining inputs while keeping artifact promotion explicit and evaluation-gated.
 
-  Config --> RG
-  Config --> CQG
-  Config --> P
-  Config --> API
-  Config --> DB
-```
+**Proposed after the feedback loop**
+- Workflow-history retention and cleanup policies.
+- Authentication and authorization for operational endpoints.
+- Secret-scanning and production security hardening.
+- Async provider clients and distributed workflow execution when measured load justifies them.
 
 ### Runtime components
 - `app/main.py` provides the web UI and endpoints.
@@ -283,7 +274,7 @@ Classifier-critical precedence across app and scripts:
 - CLI args (when available) > explicit env vars > runtime profile > hardcoded defaults.
 
 ## 9) Suggested Evaluation
-The demo should be evaluated on:
+The system should be evaluated on:
 - coverage,
 - average set size,
 - abstention rate,
@@ -291,7 +282,7 @@ The demo should be evaluated on:
 - end-to-end latency,
 - and stability across easy versus ambiguous inputs.
 
-A good demo shows both:
+A useful validation run includes both:
 - a clean, high-confidence example,
 - and a case where the uncertainty policy becomes visible.
 
@@ -303,40 +294,72 @@ For implementation work, the most useful checks are:
 - a live `POST /predict` request with `USE_MOCK_LLM=false`,
 - and a `GET /diagnostics` request before the demo starts.
 
-## 10) Planned Repository Structure
+## 10) Current Repository Structure
 ```text
-reliable_genai/
-  __init__.py
-  calibration.py
-  scoring.py
-  evaluation.py
-  llm_wrappers.py
-  pipeline.py
-  persistence.py
 app/
   main.py
   templates/
   static/
+config/
+  runtime_profile.json
+docs/
+  architecture.svg
+reliable_genai/
+  __init__.py
+  agents/
+  calibration.py
+  catalog_quality_graph.py
+  classifier.py
+  evaluation.py
+  llm_wrappers.py
+  models.py
+  pipeline.py
+  persistence.py
+  review_graph.py
+  runtime_profile.py
+  scoring.py
+  semantic_scorer.py
+  workflow_history.py
 scripts/
-  train_baseline.py
-  calibrate.py
   evaluate.py
-  demo_web.py
+  ingest_real_products.py
+  live_smoke.py
+  train_classifier.py
 reports/
+  results.json
   results.md
+tests/
 ```
 
 ## 11) Public Data Assumptions
 The project now uses processed public Shopify product catalogue data for training/evaluation. Large raw/cache data is intentionally not committed. The ingestion path records source provenance and category distribution in `data/processed/dataset_metadata.json`.
 
-## 12) Next Technical Enhancements
-Possible next steps if the project is extended:
-- add richer embedding backends (for example sentence-transformers) behind the current embedding-first interface,
-- version and compare trained model artifacts across classifier families with explicit metadata,
-- add a small evaluation notebook or report,
-- and add a results dashboard for coverage and abstention metrics.
+## 12) Engineering Roadmap
+### Immediate: feedback evidence
+1. Export only resolved review tasks with their original prediction, reviewer action, corrected values, review reason, and workflow id.
+2. Validate exported rows and reject incomplete or unresolved records.
+3. Report correction counts and rates by category and review reason.
+4. Produce a versioned JSONL or CSV retraining-input artifact with source metadata.
+5. Keep retraining and artifact promotion manual until an evaluation comparison passes defined guardrails.
 
-## 13) Pre-demo Live Validation Checklist
+### Then: operational durability
+- Add configurable retention for workflow and agent history.
+- Add cleanup as an explicit command or scheduled maintenance task.
+- Back up or migrate SQLite before enforcing destructive retention in a deployed environment.
+- Measure database growth and query latency before introducing a larger database.
+
+### Before public deployment
+- Protect `/dashboard`, `/diagnostics`, `/review`, metrics, and workflow-history endpoints with authentication and authorization.
+- Remove token-prefix disclosure from public diagnostics.
+- Add `SECURITY.md`, secret scanning, and documented secret-rotation procedures.
+- Define deployment, backup, recovery, and migration procedures.
+
+### Scale only when measurements require it
+- Replace synchronous provider calls with async clients and bounded timeouts.
+- Move execution to workers only when request latency or concurrency requires it.
+- Evaluate richer embedding backends and classifier families through versioned artifact comparisons.
+
+## 13) Live Runtime Validation Checklist
 1. Export or set live environment variables (`GITHUB_MODELS_ENDPOINT`, `GITHUB_TOKEN`, `GITHUB_MODELS_MODEL`).
 2. Start app in live mode:
    `USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload`
@@ -344,7 +367,7 @@ Possible next steps if the project is extended:
    `curl -s http://127.0.0.1:8000/diagnostics | python -m json.tool`
 4. Run at least one clear and one ambiguous prediction.
 5. Confirm response `reliability.llm_runtime` and diagnostics `last_runtime` match expected live behavior.
-6. If fallback appears, capture `llm_last_error` in demo notes.
+6. If fallback appears, capture `llm_last_error` in the validation evidence.
 
 Host-side helper:
 - `./host_side_verfication_pass.sh`

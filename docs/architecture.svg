@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600" role="img" aria-labelledby="svg-title svg-description">
+  <title id="svg-title">UAMAS system architecture</title>
+  <desc id="svg-description">A layered diagram of UAMAS entry points, prediction paths, multi-agent workflow, runtime services, durable storage, operations, and planned feedback loop.</desc>
+  <defs>
+    <style>
+      .canvas { fill: #f7f9fb; }
+      .diagram-title { font-family: Arial, sans-serif; font-size: 34px; font-weight: 700; fill: #17212b; }
+      .subtitle { font-family: Arial, sans-serif; font-size: 17px; fill: #52606d; }
+      .section { font-family: Arial, sans-serif; font-size: 21px; font-weight: 700; fill: #17212b; }
+      .heading { font-family: Arial, sans-serif; font-size: 18px; font-weight: 700; fill: #17212b; }
+      .body { font-family: Arial, sans-serif; font-size: 16px; fill: #35424f; }
+      .note { font-family: Arial, sans-serif; font-size: 14px; fill: #52606d; }
+      .implemented { fill: #ffffff; stroke: #315d75; stroke-width: 2; }
+      .lane { fill: #eef4f7; stroke: #91a8b5; stroke-width: 2; }
+      .agent { fill: #e9f5ef; stroke: #2f7658; stroke-width: 2; }
+      .service { fill: #fff5df; stroke: #a86d12; stroke-width: 2; }
+      .store { fill: #f3edfb; stroke: #7858a6; stroke-width: 2; }
+      .operations { fill: #f2f4f6; stroke: #667785; stroke-width: 2; }
+      .planned { fill: #fffaf0; stroke: #b7791f; stroke-width: 2; stroke-dasharray: 9 7; }
+      .connection { fill: none; stroke: #3d5968; stroke-width: 2.5; }
+      .soft { fill: none; stroke: #667785; stroke-width: 2; }
+      .planned-line { fill: none; stroke: #b7791f; stroke-width: 2.5; stroke-dasharray: 9 7; }
+      .step { fill: #315d75; }
+      .step-text { font-family: Arial, sans-serif; font-size: 14px; font-weight: 700; fill: #ffffff; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+  </defs>
+
+  <rect class="canvas" x="0" y="0" width="1200" height="1600"/>
+  <text class="diagram-title" x="50" y="55">UAMAS Architecture</text>
+  <text class="subtitle" x="50" y="86">Uncertainty-aware catalog analysis with explicit agents, durable history, and human review</text>
+
+  <line class="connection" x1="770" y1="52" x2="825" y2="52"/>
+  <text class="note" x="840" y="57">implemented</text>
+  <line class="planned-line" x1="970" y1="52" x2="1025" y2="52"/>
+  <text class="note" x="1040" y="57">next planned</text>
+
+  <text class="section" x="50" y="140">1. Entry and operations</text>
+
+  <rect class="implemented" x="50" y="165" width="235" height="175" rx="8"/>
+  <text class="heading" x="75" y="200">Users</text>
+  <text class="body" x="75" y="235">Browser user</text>
+  <text class="body" x="75" y="265">API client</text>
+  <text class="body" x="75" y="295">Human reviewer</text>
+
+  <rect class="implemented" x="350" y="150" width="500" height="205" rx="8"/>
+  <text class="heading" x="375" y="187">FastAPI interface</text>
+  <text class="body" x="375" y="222">/predict</text>
+  <text class="body" x="375" y="252">/api/listings/analyze</text>
+  <text class="body" x="375" y="282">/review and review API</text>
+  <text class="body" x="605" y="222">/api/workflow-runs</text>
+  <text class="body" x="605" y="252">/diagnostics and /api/metrics</text>
+  <text class="body" x="605" y="282">/dashboard</text>
+  <text class="note" x="375" y="325">Validates requests and exposes current operational state</text>
+
+  <rect class="operations" x="915" y="165" width="235" height="175" rx="8"/>
+  <text class="heading" x="940" y="200">Operations</text>
+  <text class="body" x="940" y="235">Review queue</text>
+  <text class="body" x="940" y="265">Metrics and dashboard</text>
+  <text class="body" x="940" y="295">Workflow history</text>
+
+  <line class="connection" x1="285" y1="252" x2="350" y2="252"/>
+  <line class="soft" x1="850" y1="252" x2="915" y2="252"/>
+
+  <text class="section" x="50" y="415">2. Backward-compatible prediction path</text>
+  <rect class="lane" x="50" y="440" width="1100" height="185" rx="8"/>
+  <text class="note" x="75" y="474">POST /predict preserves the original response contract</text>
+
+  <rect class="implemented" x="95" y="505" width="250" height="80" rx="8"/>
+  <text class="heading" x="120" y="537">ReviewGraphRunner</text>
+  <text class="note" x="120" y="563">optional cache-aware second pass</text>
+
+  <rect class="implemented" x="475" y="495" width="280" height="100" rx="8"/>
+  <text class="heading" x="500" y="527">ReliabilityPipeline</text>
+  <text class="note" x="500" y="552">classification, calibration, semantic</text>
+  <text class="note" x="500" y="574">scoring, extraction, reliability metadata</text>
+
+  <rect class="implemented" x="885" y="505" width="220" height="80" rx="8"/>
+  <text class="heading" x="910" y="537">PredictionResponse</text>
+  <text class="note" x="910" y="563">validated Pydantic output</text>
+
+  <line class="connection" x1="345" y1="545" x2="475" y2="545"/>
+  <line class="connection" x1="755" y1="545" x2="885" y2="545"/>
+  <circle class="step" cx="410" cy="545" r="14"/>
+  <text class="step-text" x="410" y="545">1</text>
+  <circle class="step" cx="820" cy="545" r="14"/>
+  <text class="step-text" x="820" y="545">2</text>
+
+  <text class="section" x="50" y="685">3. Primary catalog-quality multi-agent path</text>
+  <rect class="lane" x="50" y="710" width="1100" height="485" rx="8"/>
+  <text class="note" x="75" y="744">POST /api/listings/analyze creates a durable workflow before agent execution</text>
+
+  <rect class="agent" x="95" y="790" width="205" height="90" rx="8"/>
+  <text class="heading" x="120" y="825">Classifier agent</text>
+  <text class="note" x="120" y="852">probabilities + category set</text>
+
+  <rect class="agent" x="95" y="1015" width="205" height="90" rx="8"/>
+  <text class="heading" x="120" y="1050">Extraction agent</text>
+  <text class="note" x="120" y="1077">structured product attributes</text>
+
+  <rect class="agent" x="385" y="790" width="220" height="90" rx="8"/>
+  <text class="heading" x="410" y="825">Semantic critic</text>
+  <text class="note" x="410" y="852">candidate consistency score</text>
+
+  <rect class="agent" x="680" y="900" width="205" height="90" rx="8"/>
+  <text class="heading" x="705" y="935">Policy agent</text>
+  <text class="note" x="705" y="962">deterministic risk routing</text>
+
+  <rect class="agent" x="930" y="1015" width="175" height="90" rx="8"/>
+  <text class="heading" x="955" y="1050">Human review</text>
+  <text class="note" x="955" y="1077">creates queue task</text>
+
+  <rect class="agent" x="930" y="790" width="175" height="90" rx="8"/>
+  <text class="heading" x="955" y="825">Decision agent</text>
+  <text class="note" x="955" y="852">final catalog result</text>
+
+  <line class="connection" x1="300" y1="835" x2="385" y2="835"/>
+  <path class="connection" d="M605 835 L640 835 L640 930 L680 930"/>
+  <path class="connection" d="M300 1060 L640 1060 L640 960 L680 960"/>
+  <line class="connection" x1="885" y1="930" x2="930" y2="855"/>
+  <line class="connection" x1="885" y1="960" x2="930" y2="1060"/>
+  <line class="connection" x1="1018" y1="1015" x2="1018" y2="880"/>
+
+  <text class="note" x="325" y="780">classifier evidence</text>
+  <text class="note" x="440" y="1047">attribute evidence</text>
+  <text class="note" x="886" y="890">auto accept</text>
+  <text class="note" x="890" y="1000">needs review</text>
+  <text class="note" x="75" y="1155">Every agent records status, duration, safe output summary, and failures in the workflow history.</text>
+
+  <text class="section" x="50" y="1250">4. Shared runtime and durable state</text>
+  <rect class="service" x="50" y="1275" width="1100" height="135" rx="8"/>
+
+  <rect class="implemented" x="80" y="1310" width="275" height="65" rx="8"/>
+  <text class="heading" x="105" y="1338">Classifier artifact</text>
+  <text class="note" x="105" y="1362">processed real product data</text>
+
+  <rect class="implemented" x="430" y="1310" width="275" height="65" rx="8"/>
+  <text class="heading" x="455" y="1338">GitHub Models</text>
+  <text class="note" x="455" y="1362">LLM extraction and embeddings</text>
+
+  <rect class="store" x="780" y="1310" width="340" height="65" rx="8"/>
+  <text class="heading" x="805" y="1338">SQLite operational store</text>
+  <text class="note" x="805" y="1362">reviews, predictions, workflows, agent runs</text>
+
+  <text class="section" x="50" y="1460">5. Next planned: human-feedback evidence loop</text>
+  <rect class="planned" x="50" y="1480" width="1100" height="70" rx="8"/>
+  <text class="note" x="75" y="1522">Resolved reviews  |  validated export  |  correction analytics  |  versioned retraining input  |  evaluation-gated promotion</text>
+  <text class="note" x="50" y="1585">Later production work: retention, endpoint authentication, secret hardening, async providers, and distributed execution.</text>
+</svg>
