@@ -1,15 +1,14 @@
-name: CI
+name: Acceptance
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  USE_MOCK_LLM: "true"
 
 permissions:
   contents: read
@@ -19,9 +18,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  evaluation:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
@@ -33,16 +32,8 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Scan tracked files for secrets
-        run: python scripts/check_secrets.py
-
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
-
-      - name: Audit Python dependencies
-        run: |
-          python -m pip install pip-audit==2.10.1
-          python -m pip_audit -r requirements.txt
 
       - name: Train classifier artifact
         run: python scripts/train_classifier.py --force
@@ -51,14 +42,13 @@ jobs:
         run: |
           python -c "from reliable_genai.pipeline import ReliabilityPipeline; p = ReliabilityPipeline(); d = p.classifier.diagnostics(); assert d['runtime'] == 'ARTIFACT', d; assert d.get('artifact_rejection_reason') is None, d"
 
-      - name: Verify strict artifact compatibility checks
-        run: python -m pytest tests/test_classifier.py -k "unsupported_artifact_version or missing_required_metadata_field"
+      - name: Run sampled mock evaluation smoke check
+        run: python scripts/evaluate.py --sample-size 250 --output /tmp/ci-results.md
 
-      - name: Verify strict-mode opt-out compatibility
-        run: python -m pytest tests/test_classifier.py -k "strict_metadata_can_be_disabled_for_artifact_compatibility or pipeline_loads_classifier_artifact_with_opt_out"
+      - name: Run sampled review acceptance section smoke check
+        run: python scripts/evaluate.py --mock --sample-size 250 --with-review-acceptance-check --output /tmp/results-with-acceptance.md
 
-      - name: Run tests
-        run: python -m pytest
-
-      - name: Compile Python modules
-        run: python -m compileall app reliable_genai scripts tests
+      - name: Verify evaluation evidence
+        run: |
+          test -s /tmp/ci-results.md
+          grep -q "Review Trigger Reduction Acceptance Check" /tmp/results-with-acceptance.md

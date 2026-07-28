@@ -428,7 +428,45 @@ Host-side helper:
 - `./host_side_verfication_pass.sh`
 - Expected pass signal: each `PREDICT_*` line reports `llm_runtime: LIVE` and `diag_llm_last_error: None`.
 
-## 14) GitHub Actions Live Smoke Workflow
+## 14) GitHub Actions Validation
+The repository separates merge validation from longer evaluation evidence:
+
+### Fast CI
+Workflow file:
+- `.github/workflows/ci.yml`
+
+Triggers:
+- pull requests targeting `main`,
+- pushes to `main`.
+
+What it verifies:
+- tracked files do not contain known secret patterns,
+- Python dependencies install and pass `pip-audit`,
+- the classifier artifact rebuilds and reloads without metadata rejection,
+- strict and compatibility artifact modes remain valid,
+- the full pytest suite passes,
+- Python modules compile.
+
+This workflow retains the `CI / test` check identity used by branch protection. Superseded runs for the same pull request or branch are cancelled.
+
+### Acceptance
+Workflow file:
+- `.github/workflows/acceptance.yml`
+
+Triggers:
+- pushes to `main`,
+- manual `workflow_dispatch`.
+
+What it verifies:
+- deterministic sampled mock evaluation completes,
+- the review-trigger acceptance comparison completes,
+- the generated report contains the acceptance evidence section.
+
+Acceptance is intentionally not repeated on every pull request. It runs against the integrated `main` state, while unit and integration coverage remains in the required fast gate.
+
+Dependabot groups routine Python minor/patch updates and GitHub Actions updates by ecosystem. Major Python updates remain isolated for explicit review.
+
+## 15) GitHub Actions Live Smoke Workflow
 Workflow file:
 - `.github/workflows/live-smoke.yml`
 
@@ -447,7 +485,7 @@ What it verifies:
 Local equivalent:
 - `USE_MOCK_LLM=false .venv/bin/python scripts/live_smoke.py`
 
-## 15) Merge Safety Checklist
+## 16) Merge Safety Checklist
 - Keep each PR single-purpose (tests, docs, workflow, evaluation) instead of mixing concerns.
 - Rebase on `main` before opening and before merging.
 - Prefer append-only edits in large test files to reduce hunk conflicts.
