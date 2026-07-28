@@ -247,11 +247,13 @@ Dashboard updates:
 ### Phase 5: Feedback Loop
 Use human corrections as evidence.
 
+Status: **implemented for the first evidence-export slice**. Resolved reviews can now be previewed and exported as deterministic, versioned JSONL batches. The export separates audit evidence, training-eligible examples, and excluded records; reports correction metrics; preserves workflow provenance; records batch membership in SQLite; and prevents duplicate exports. Retraining and artifact promotion remain explicit follow-up work.
+
 Add:
-- export reviewed examples,
-- compare reviewed labels against model predictions,
-- report correction rate by category,
-- prepare retraining input from reviewed corrections.
+- [x] export reviewed examples,
+- [x] compare reviewed labels against model predictions,
+- [x] report correction rate by category and review reason,
+- [x] prepare validated retraining input from reviewed corrections.
 
 Retraining should remain explicit:
 ```bash

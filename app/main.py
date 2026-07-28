@@ -463,6 +463,8 @@ def submit_review_task_decision(
         review_store.record_review_decision(task_id, decision)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return RedirectResponse(url="/review", status_code=303)
 
 
@@ -554,6 +556,8 @@ def record_review_task_decision(task_id: str, decision: ReviewDecision) -> Revie
         return review_store.record_review_decision(task_id, decision)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get(

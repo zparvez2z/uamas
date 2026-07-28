@@ -200,10 +200,23 @@ How to read the diagram:
 - Preserves running workflows, pending reviews, and all resolved review evidence.
 - Records successful and failed attempts in `maintenance_runs`.
 
+### `reliable_genai/feedback.py`
+- Joins resolved reviews to their listing, prediction, and workflow provenance.
+- Produces deterministic audit evidence and conservative training examples.
+- Excludes rejected, incomplete, invalid, and ambiguous approved records from training input.
+- Reports correction and rejection rates by original category and review reason.
+- Writes checksummed manifests and uses deterministic batch fingerprints for idempotency.
+
 ### `scripts/cleanup_operational_data.py`
 - Runs in dry-run mode unless `--apply` is supplied.
 - Supports deterministic `--now`, database-path override, and optional `--vacuum`.
 - Prints a structured cleanup report for operational evidence.
+
+### `scripts/export_review_feedback.py`
+- Previews resolved, not-yet-exported review evidence by default.
+- Writes and registers a versioned batch only when `--apply` is supplied.
+- Supports database-path and output-directory overrides.
+- Keeps reviewer notes out of generated evidence and training files.
 
 ## 6) Reliability Metadata
 The response includes:
@@ -351,6 +364,7 @@ reliable_genai/
   catalog_quality_graph.py
   classifier.py
   evaluation.py
+  feedback.py
   llm_wrappers.py
   maintenance.py
   models.py
@@ -366,6 +380,7 @@ scripts/
   check_secrets.py
   cleanup_operational_data.py
   evaluate.py
+  export_review_feedback.py
   ingest_real_products.py
   live_smoke.py
   train_classifier.py
@@ -380,11 +395,29 @@ The project now uses processed public Shopify product catalogue data for trainin
 
 ## 12) Engineering Roadmap
 ### Immediate: feedback evidence
-1. Export only resolved review tasks with their original prediction, reviewer action, corrected values, review reason, and workflow id.
-2. Validate exported rows and reject incomplete or unresolved records.
+Status: **implemented for the first export slice**.
+
+Implemented:
+1. Export only resolved, not-yet-exported review tasks with original prediction, reviewer action, corrected values, review reason, and workflow id.
+2. Validate records and exclude incomplete, rejected, invalid, or ambiguous approved examples from training input.
 3. Report correction counts and rates by category and review reason.
-4. Produce a versioned JSONL or CSV retraining-input artifact with source metadata.
-5. Keep retraining and artifact promotion manual until an evaluation comparison passes defined guardrails.
+4. Produce versioned JSONL evidence, training, and exclusion artifacts with a checksummed manifest.
+5. Track completed batches and review-task membership in SQLite to prevent duplicate exports.
+6. Keep retraining and artifact promotion manual until an evaluation comparison passes defined guardrails.
+
+Feedback export workflow:
+```bash
+.venv/bin/python scripts/export_review_feedback.py
+.venv/bin/python scripts/export_review_feedback.py --apply
+```
+
+The first command is a dry run. The applied command writes a private batch under `data/feedback/` and registers it only after all artifacts and the manifest are complete.
+
+Next feedback-loop work:
+- define the minimum evidence volume required before retraining,
+- combine eligible feedback with the pinned public training split,
+- compare candidate and active artifacts on fixed evaluation evidence,
+- promote only when coverage and correction-rate guardrails pass.
 
 ### Implemented production baseline
 - Production fails startup when authentication secrets or allowed hosts are missing.

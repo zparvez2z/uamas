@@ -138,6 +138,22 @@ Apply cleanup after reviewing the report:
 
 Applied cleanup creates a backup, prunes expired detailed agent history, and preserves workflow summaries and human-review evidence.
 
+## Feedback Evidence
+
+Preview resolved human reviews that are ready for export:
+
+```bash
+.venv/bin/python scripts/export_review_feedback.py
+```
+
+Write a versioned, deduplicated evidence batch after reviewing the preview:
+
+```bash
+.venv/bin/python scripts/export_review_feedback.py --apply
+```
+
+Each batch separates complete review evidence, training-eligible examples, and excluded records with validation reasons. Generated feedback artifacts remain local under `data/feedback/`; retraining and classifier promotion are still explicit operations.
+
 ## Data
 
 The processed dataset comes from the public [Shopify Product Catalogue](https://huggingface.co/datasets/Shopify/product-catalogue).

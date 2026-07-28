@@ -172,6 +172,35 @@ def test_store_raises_for_missing_review_task(tmp_path: Path) -> None:
         store.record_review_decision("rev_missing", ReviewDecision(action="reject"))
 
 
+def test_store_does_not_overwrite_resolved_review_decision(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    listing_id = store.create_listing(
+        ListingInput(title="item", description="description")
+    )
+    task = store.create_review_task(
+        listing_id=listing_id,
+        prediction_id=None,
+        reason="abstained",
+    )
+    approved = store.record_review_decision(
+        task.id,
+        ReviewDecision(action="approve"),
+    )
+
+    with pytest.raises(ValueError, match="already resolved"):
+        store.record_review_decision(
+            task.id,
+            ReviewDecision(
+                action="correct",
+                corrected_category="Sports",
+            ),
+        )
+
+    assert store.get_review_task(task.id) == approved
+
+
 def test_store_persists_completed_workflow_and_agent_history(tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
     workflow = store.start_workflow_run(

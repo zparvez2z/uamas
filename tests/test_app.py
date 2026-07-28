@@ -538,6 +538,30 @@ def test_review_queue_decision_endpoint_updates_task(monkeypatch, tmp_path: Path
     assert app_main.list_review_queue() == []
 
 
+def test_review_queue_repeated_decision_returns_409(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    _install_catalog_graph(monkeypatch, store, _prediction(confidence=0.2))
+    decision = app_main.analyze_listing(
+        ListingInput(title="Ambiguous item", description="Needs reviewer")
+    )
+    app_main.record_review_task_decision(
+        decision.review_task_id,
+        ReviewDecision(action="approve"),
+    )
+
+    try:
+        app_main.record_review_task_decision(
+            decision.review_task_id,
+            ReviewDecision(action="reject"),
+        )
+        assert False, "expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 409
+
+
 def test_review_queue_missing_task_returns_404(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(app_main, "review_store", SQLiteReviewStore(tmp_path / "uamas.db"))
 

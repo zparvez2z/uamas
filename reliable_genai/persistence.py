@@ -150,6 +150,31 @@ class SQLiteReviewStore:
 
                 CREATE INDEX IF NOT EXISTS idx_maintenance_runs_started
                     ON maintenance_runs(started_at DESC);
+
+                CREATE TABLE IF NOT EXISTS feedback_export_batches (
+                    id TEXT PRIMARY KEY,
+                    schema_version TEXT NOT NULL,
+                    source_fingerprint TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL,
+                    output_directory TEXT NOT NULL,
+                    selected_count INTEGER NOT NULL,
+                    training_eligible_count INTEGER NOT NULL,
+                    excluded_count INTEGER NOT NULL,
+                    manifest_sha256 TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    completed_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS feedback_export_items (
+                    review_task_id TEXT PRIMARY KEY,
+                    batch_id TEXT NOT NULL,
+                    decision_updated_at TEXT NOT NULL,
+                    FOREIGN KEY(review_task_id) REFERENCES review_tasks(id),
+                    FOREIGN KEY(batch_id) REFERENCES feedback_export_batches(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_feedback_export_batches_completed
+                    ON feedback_export_batches(completed_at DESC);
                 """
             )
             workflow_columns = {
@@ -624,7 +649,7 @@ class SQLiteReviewStore:
                         corrected_attributes_json = ?,
                         notes = ?,
                         updated_at = ?
-                    WHERE id = ?
+                    WHERE id = ? AND status = 'pending'
                     """,
                     (
                         status,
@@ -635,12 +660,152 @@ class SQLiteReviewStore:
                         task_id,
                     ),
                 )
-        if cursor.rowcount == 0:
-            raise KeyError(f"review task not found: {task_id}")
+                if cursor.rowcount == 0:
+                    existing = conn.execute(
+                        "SELECT status FROM review_tasks WHERE id = ?",
+                        (task_id,),
+                    ).fetchone()
+                    if existing is None:
+                        raise KeyError(f"review task not found: {task_id}")
+                    raise ValueError(
+                        f"review task is already resolved: {task_id} "
+                        f"({existing['status']})"
+                    )
         task = self.get_review_task(task_id)
         if task is None:
             raise KeyError(f"review task not found: {task_id}")
         return task
+
+    def list_feedback_export_candidates(self) -> list[dict[str, object]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    review_tasks.id AS review_task_id,
+                    review_tasks.listing_id,
+                    review_tasks.prediction_id,
+                    review_tasks.status AS review_status,
+                    review_tasks.reason AS review_reason,
+                    review_tasks.risk_level AS review_risk_level,
+                    review_tasks.corrected_category,
+                    review_tasks.corrected_attributes_json,
+                    review_tasks.created_at AS review_created_at,
+                    review_tasks.updated_at AS review_updated_at,
+                    listings.external_id,
+                    listings.title,
+                    listings.description,
+                    listings.created_at AS listing_created_at,
+                    predictions.category_set_json,
+                    predictions.attributes_json,
+                    predictions.reliability_json,
+                    predictions.created_at AS prediction_created_at,
+                    workflow_runs.id AS workflow_run_id,
+                    workflow_runs.status AS workflow_status,
+                    workflow_runs.decision AS workflow_decision,
+                    workflow_runs.risk_level AS workflow_risk_level,
+                    workflow_runs.graph_backend,
+                    workflow_runs.started_at AS workflow_started_at,
+                    workflow_runs.completed_at AS workflow_completed_at,
+                    workflow_runs.history_pruned_at
+                FROM review_tasks
+                JOIN listings
+                    ON listings.id = review_tasks.listing_id
+                LEFT JOIN predictions
+                    ON predictions.id = review_tasks.prediction_id
+                LEFT JOIN workflow_runs
+                    ON workflow_runs.id = (
+                        SELECT candidate_workflow.id
+                        FROM workflow_runs AS candidate_workflow
+                        WHERE candidate_workflow.review_task_id = review_tasks.id
+                        ORDER BY candidate_workflow.started_at DESC
+                        LIMIT 1
+                    )
+                WHERE review_tasks.status IN (
+                    'approved',
+                    'corrected',
+                    'rejected'
+                )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM feedback_export_items
+                    WHERE feedback_export_items.review_task_id = review_tasks.id
+                  )
+                ORDER BY review_tasks.updated_at, review_tasks.id
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def record_feedback_export_batch(
+        self,
+        *,
+        batch_id: str,
+        schema_version: str,
+        source_fingerprint: str,
+        output_directory: str,
+        selected_count: int,
+        training_eligible_count: int,
+        excluded_count: int,
+        manifest_sha256: str,
+        review_items: list[tuple[str, str]],
+    ) -> None:
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO feedback_export_batches (
+                        id,
+                        schema_version,
+                        source_fingerprint,
+                        status,
+                        output_directory,
+                        selected_count,
+                        training_eligible_count,
+                        excluded_count,
+                        manifest_sha256,
+                        created_at,
+                        completed_at
+                    )
+                    VALUES (?, ?, ?, 'completed', ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        batch_id,
+                        schema_version,
+                        source_fingerprint,
+                        output_directory,
+                        selected_count,
+                        training_eligible_count,
+                        excluded_count,
+                        manifest_sha256,
+                        now,
+                        now,
+                    ),
+                )
+                conn.executemany(
+                    """
+                    INSERT INTO feedback_export_items (
+                        review_task_id,
+                        batch_id,
+                        decision_updated_at
+                    )
+                    VALUES (?, ?, ?)
+                    """,
+                    [
+                        (review_task_id, batch_id, decision_updated_at)
+                        for review_task_id, decision_updated_at in review_items
+                    ],
+                )
+
+    def get_feedback_export_batch(
+        self,
+        batch_id: str,
+    ) -> dict[str, object] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM feedback_export_batches WHERE id = ?",
+                (batch_id,),
+            ).fetchone()
+        return dict(row) if row else None
 
     def start_maintenance_run(
         self,
