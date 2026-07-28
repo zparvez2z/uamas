@@ -6,12 +6,18 @@ updates:
       interval: monthly
     open-pull-requests-limit: 5
     groups:
-      python-minor-and-patch:
+      routine-python:
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
+        exclude-patterns:
+          - "azure-ai-inference"
+          - "azure-core"
+          - "fastapi"
+          - "langgraph"
+          - "pydantic"
+          - "pytest"
+          - "scikit-learn"
+          - "uvicorn"
 
   - package-ecosystem: github-actions
     directory: /

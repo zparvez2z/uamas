@@ -464,7 +464,7 @@ What it verifies:
 
 Acceptance is intentionally not repeated on every pull request. It runs against the integrated `main` state, while unit and integration coverage remains in the required fast gate.
 
-Dependabot groups routine Python minor/patch updates and GitHub Actions updates by ecosystem. Major Python updates remain isolated for explicit review.
+Dependabot groups routine Python updates and GitHub Actions updates by ecosystem. Framework, model, orchestration, provider, server, and test-runner dependencies are excluded from the routine Python group so they remain isolated for explicit review. Package-name exclusions are used instead of semantic update types because lower-bound-only requirements do not give Dependabot a reliable installed version for classifying an update as major, minor, or patch.
 
 ## 15) GitHub Actions Live Smoke Workflow
 Workflow file:
