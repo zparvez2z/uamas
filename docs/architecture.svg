@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600" role="img" aria-labelledby="svg-title svg-description">
   <title id="svg-title">UAMAS system architecture</title>
-  <desc id="svg-description">A layered diagram of UAMAS entry points, prediction paths, multi-agent workflow, runtime services, durable storage, operations, and planned feedback loop.</desc>
+  <desc id="svg-description">A layered diagram of UAMAS entry points, prediction paths, multi-agent workflow, runtime services, durable storage, implemented feedback evidence, and planned candidate promotion.</desc>
   <defs>
     <style>
       .canvas { fill: #f7f9fb; }
@@ -141,8 +141,12 @@
   <text class="heading" x="805" y="1338">SQLite operational store</text>
   <text class="note" x="805" y="1362">reviews, predictions, workflows, agent runs</text>
 
-  <text class="section" x="50" y="1460">5. Next planned: human-feedback evidence loop</text>
-  <rect class="planned" x="50" y="1480" width="1100" height="70" rx="8"/>
-  <text class="note" x="75" y="1522">Resolved reviews  |  validated export  |  correction analytics  |  versioned retraining input  |  evaluation-gated promotion</text>
+  <text class="section" x="50" y="1460">5. Feedback learning path</text>
+  <rect class="implemented" x="50" y="1480" width="700" height="70" rx="8"/>
+  <text class="note" x="75" y="1510">Feedback pool  |  review campaigns  |  hidden references</text>
+  <text class="note" x="75" y="1535">validated export  |  correction and agreement analytics</text>
+  <rect class="planned" x="775" y="1480" width="375" height="70" rx="8"/>
+  <text class="note" x="800" y="1510">Candidate retraining</text>
+  <text class="note" x="800" y="1535">evaluation-gated promotion</text>
   <text class="note" x="50" y="1585">Production baseline includes authentication, CSRF, secret scanning, and audited retention. Later: TLS deployment, restore drills, async providers, and distributed execution.</text>
 </svg>

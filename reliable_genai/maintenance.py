@@ -57,7 +57,7 @@ class RetentionPolicy:
         if self.resolved_review_retention_days != 0:
             raise ValueError(
                 "resolved-review deletion is disabled until feedback exports "
-                "can prove evidence was preserved; set "
+                "have exercised restore verification; set "
                 "RESOLVED_REVIEW_RETENTION_DAYS=0"
             )
         if self.batch_size <= 0:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -135,8 +136,15 @@ def test_feedback_export_separates_training_and_excluded_records(
         store,
         title="Ambiguous item",
         category_set=["Home", "Electronics"],
-        decision=ReviewDecision(action="approve"),
+        decision=ReviewDecision(action="reject"),
     )
+    # Preserve coverage for legacy ambiguous approvals that predate the
+    # single-category approval guard.
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute(
+            "UPDATE review_tasks SET status = 'approved' WHERE id = ?",
+            (ambiguous_id,),
+        )
     rejected_id = _resolved_workflow_review(
         store,
         title="Rejected item",
@@ -147,11 +155,17 @@ def test_feedback_export_separates_training_and_excluded_records(
         store,
         title="Unknown category",
         category_set=["Home"],
-        decision=ReviewDecision(
-            action="correct",
-            corrected_category="Unsupported",
-        ),
+        decision=ReviewDecision(action="reject"),
     )
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute(
+            """
+            UPDATE review_tasks
+            SET status = 'corrected', corrected_category = 'Unsupported'
+            WHERE id = ?
+            """,
+            (invalid_correction_id,),
+        )
 
     listing_id = store.create_listing(
         ListingInput(title="Legacy item", description="No workflow")
@@ -231,6 +245,9 @@ def test_feedback_export_separates_training_and_excluded_records(
     assert corrected_training["category"] == "Shoes"
     assert corrected_training["attributes"]["material"] == "rubber"
     assert "private note" not in (
+        output_directory / "review_evidence.jsonl"
+    ).read_text(encoding="utf-8")
+    assert "reference_category" not in (
         output_directory / "review_evidence.jsonl"
     ).read_text(encoding="utf-8")
 

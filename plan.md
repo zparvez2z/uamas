@@ -110,6 +110,7 @@ Generated files:
 data/processed/train.json
 data/processed/calibration.json
 data/processed/test.json
+data/processed/feedback_pool.json
 data/processed/dataset_metadata.json
 ```
 
@@ -247,13 +248,16 @@ Dashboard updates:
 ### Phase 5: Feedback Loop
 Use human corrections as evidence.
 
-Status: **implemented for the first evidence-export slice**. Resolved reviews can now be previewed and exported as deterministic, versioned JSONL batches. The export separates audit evidence, training-eligible examples, and excluded records; reports correction metrics; preserves workflow provenance; records batch membership in SQLite; and prevents duplicate exports. Retraining and artifact promotion remain explicit follow-up work.
+Status: **implemented through controlled evidence collection and export**. A balanced, disjoint feedback pool feeds deterministic review campaigns. Campaigns preserve natural policy outcomes, add explicit auto-accept controls, hide source reference labels from reviewers, support bounded execution, report aggregate agreement/readiness, and export validated, deduplicated JSONL evidence. Retraining and artifact promotion remain explicit follow-up work.
 
 Add:
 - [x] export reviewed examples,
 - [x] compare reviewed labels against model predictions,
 - [x] report correction rate by category and review reason,
 - [x] prepare validated retraining input from reviewed corrections.
+- [x] isolate feedback candidates from untouched evaluation data,
+- [x] run durable, resumable, category-balanced review campaigns,
+- [x] report model/reviewer/reference agreement and retraining readiness.
 
 Retraining should remain explicit:
 ```bash
@@ -285,7 +289,7 @@ Current retention behavior:
 - workflows attached to pending reviews are preserved,
 - old completed/failed workflow summaries are retained,
 - detailed agent rows and workflow error text are pruned after the configured retention period,
-- resolved review evidence is retained until feedback export tracking is implemented.
+- resolved review evidence remains retained until exported-feedback restore verification is implemented and exercised.
 
 Remaining deployment-specific work:
 - TLS and reverse-proxy request throttling,

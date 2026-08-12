@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -173,20 +174,91 @@ def test_ingest_real_products_local_cli_writes_splits_and_metadata(tmp_path: Pat
     train = json.loads((output_dir / "train.json").read_text(encoding="utf-8"))
     calibration = json.loads((output_dir / "calibration.json").read_text(encoding="utf-8"))
     test = json.loads((output_dir / "test.json").read_text(encoding="utf-8"))
+    feedback_pool = json.loads(
+        (output_dir / "feedback_pool.json").read_text(encoding="utf-8")
+    )
     metadata = json.loads((output_dir / "dataset_metadata.json").read_text(encoding="utf-8"))
 
     assert "Normalized rows: 12" in completed.stdout
-    assert len(train) + len(calibration) + len(test) == 12
+    assert len(train) + len(calibration) + len(test) + len(feedback_pool) == 12
     assert metadata["source"] == f"local:{input_path}"
     assert metadata["split_seed"] == 7
-    assert metadata["mapping_version"] == 1
+    assert metadata["mapping_version"] == 2
     assert metadata["normalized_rows"] == 12
     assert metadata["split_counts"] == {
         "train": len(train),
         "calibration": len(calibration),
         "test": len(test),
+        "feedback_pool": len(feedback_pool),
+    }
+    assert metadata["split_id_field"] == "ean"
+    assert set(metadata["split_fingerprints_sha256"]) == {
+        "train",
+        "calibration",
+        "test",
+        "feedback_pool",
     }
     assert sorted(metadata["category_counts"]) == sorted(ingest.TARGET_LABELS)
+
+
+def test_feedback_pool_partition_is_balanced_deterministic_and_disjoint() -> None:
+    from scripts.load_dataset import partition_feedback_pool, validate_disjoint_splits
+
+    test_rows = [
+        {
+            "ean": f"{category}-{index}",
+            "title": f"{category} {index}",
+            "category": category,
+        }
+        for category in ingest.TARGET_LABELS
+        for index in range(5)
+    ]
+
+    first = partition_feedback_pool(
+        {"train": [], "calibration": [], "test": test_rows},
+        per_category=2,
+        seed=17,
+    )
+    second = partition_feedback_pool(
+        {"train": [], "calibration": [], "test": test_rows},
+        per_category=2,
+        seed=17,
+    )
+
+    assert first == second
+    assert len(first["feedback_pool"]) == 12
+    assert len(first["test"]) == 18
+    assert Counter(row["category"] for row in first["feedback_pool"]) == {
+        category: 2 for category in ingest.TARGET_LABELS
+    }
+    validate_disjoint_splits(first)
+
+
+def test_committed_processed_splits_are_disjoint_and_fingerprinted() -> None:
+    from scripts.load_dataset import split_fingerprint, validate_disjoint_splits
+
+    processed_dir = Path(__file__).parent.parent / "data" / "processed"
+    split_names = ("train", "calibration", "test", "feedback_pool")
+    splits = {
+        name: json.loads(
+            (processed_dir / f"{name}.json").read_text(encoding="utf-8")
+        )
+        for name in split_names
+    }
+    metadata = json.loads(
+        (processed_dir / "dataset_metadata.json").read_text(encoding="utf-8")
+    )
+
+    validate_disjoint_splits(splits)
+    assert metadata["split_counts"] == {
+        name: len(rows) for name, rows in splits.items()
+    }
+    assert metadata["split_fingerprints_sha256"] == {
+        name: split_fingerprint(rows) for name, rows in splits.items()
+    }
+    assert Counter(row["category"] for row in splits["feedback_pool"]) == {
+        category: 20 for category in ingest.TARGET_LABELS
+    }
 
 
 def test_load_shopify_rows_drops_image_columns(monkeypatch) -> None:

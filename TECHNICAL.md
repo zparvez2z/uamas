@@ -39,7 +39,7 @@ How to read the diagram:
 - The central lane is the primary operational path and contains the explicit catalog-quality agents.
 - Shared model, artifact, and SQLite services support both request paths.
 - The operations column exposes review, diagnostics, metrics, dashboard, and durable workflow history.
-- Solid connections are implemented. The dashed feedback loop is proposed as the next engineering phase.
+- Solid connections are implemented. The feedback evidence path is implemented; only candidate retraining and promotion remain dashed/planned.
 
 ### Delivery status
 **Implemented now**
@@ -51,11 +51,12 @@ How to read the diagram:
 - Production fail-closed authentication, signed admin sessions, bearer API access, CSRF protection, security headers, and bounded request bodies.
 - Audited workflow-history retention with dry-run preview, pre-change backup, bounded pruning, and optional vacuum.
 - Browser and JSON review interfaces, operational metrics, diagnostics, dashboard, CI, and live smoke verification.
+- A disjoint, balanced feedback pool with deterministic review campaigns, bounded execution, hidden reference labels, aggregate agreement reporting, and validated feedback export.
 
 **Next planned**
-- Export resolved human reviews as validated feedback evidence.
-- Add correction metrics by category and review reason.
-- Prepare versioned retraining inputs while keeping artifact promotion explicit and evaluation-gated.
+- Resolve the first balanced review campaign.
+- Train feedback-augmented artifacts as candidates without replacing the active artifact.
+- Compare candidates on untouched test evidence and promote only through explicit guardrails.
 
 **Proposed after the feedback loop**
 - Deployment-specific backup restoration drills and operational monitoring.
@@ -72,6 +73,7 @@ How to read the diagram:
 - `reliable_genai/workflow_history.py` records bounded per-agent summaries, durations, degradation, and failures.
 - `reliable_genai/security.py` owns production configuration validation, admin sessions, API bearer authentication, CSRF checks, and response hardening.
 - `reliable_genai/maintenance.py` owns retention policy resolution and audited cleanup orchestration.
+- `reliable_genai/review_campaigns.py` owns deterministic campaign sampling, bounded execution, hidden-reference comparison, and retraining readiness reporting.
 - `reliable_genai/runtime_profile.py` resolves classifier-critical runtime defaults and precedence.
 - `reliable_genai/models.py` defines the Pydantic request and response models.
 
@@ -218,6 +220,12 @@ How to read the diagram:
 - Supports database-path and output-directory overrides.
 - Keeps reviewer notes out of generated evidence and training files.
 
+### `scripts/review_campaign.py`
+- Plans and creates deterministic category-balanced campaigns from `feedback_pool.json`.
+- Processes bounded batches through the normal catalog graph and resumes remaining work safely.
+- Reuses naturally triggered review tasks and creates explicit controls for auto-accepted cases.
+- Reports model/reviewer/reference agreement and retraining readiness without exposing per-item reference labels.
+
 ## 6) Reliability Metadata
 The response includes:
 - `alpha`
@@ -318,7 +326,7 @@ Security:
 
 Retention and cleanup:
 - `WORKFLOW_RETENTION_DAYS` (default `90`)
-- `RESOLVED_REVIEW_RETENTION_DAYS` (must remain `0` until feedback export tracking exists)
+- `RESOLVED_REVIEW_RETENTION_DAYS` (must remain `0` until exported-feedback restore verification is exercised)
 - `CLEANUP_BATCH_SIZE` (default `500`)
 - `CLEANUP_BACKUP_ENABLED` (default `true`)
 - `CLEANUP_BACKUP_DIR` (default `data/backups`)
@@ -371,6 +379,7 @@ reliable_genai/
   pipeline.py
   persistence.py
   review_graph.py
+  review_campaigns.py
   runtime_profile.py
   scoring.py
   security.py
@@ -383,6 +392,7 @@ scripts/
   export_review_feedback.py
   ingest_real_products.py
   live_smoke.py
+  review_campaign.py
   train_classifier.py
 reports/
   results.json
@@ -391,7 +401,9 @@ tests/
 ```
 
 ## 11) Public Data Assumptions
-The project now uses processed public Shopify product catalogue data for training/evaluation. Large raw/cache data is intentionally not committed. The ingestion path records source provenance and category distribution in `data/processed/dataset_metadata.json`.
+The project uses processed public Shopify product catalogue data for training/evaluation. Large raw/cache data is intentionally not committed. The ingestion path records source provenance, split fingerprints, category distribution, and disjoint split ownership in `data/processed/dataset_metadata.json`.
+
+The 120-row `feedback_pool.json` is removed from the untouched test split before review. Human-reviewed feedback may therefore become future training evidence without contaminating canonical evaluation.
 
 ## 12) Engineering Roadmap
 ### Immediate: feedback evidence
@@ -414,10 +426,24 @@ Feedback export workflow:
 The first command is a dry run. The applied command writes a private batch under `data/feedback/` and registers it only after all artifacts and the manifest are complete.
 
 Next feedback-loop work:
-- define the minimum evidence volume required before retraining,
-- combine eligible feedback with the pinned public training split,
+- resolve the balanced campaign and evaluate its readiness report,
+- combine eligible feedback with the pinned public training split as a candidate,
 - compare candidate and active artifacts on fixed evaluation evidence,
 - promote only when coverage and correction-rate guardrails pass.
+
+Review campaign workflow:
+```bash
+USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+  plan --name baseline-01 --per-category 20 --seed 42
+USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+  create --name baseline-01 --per-category 20 --seed 42
+USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+  run CAMPAIGN_ID --limit 20
+.venv/bin/python scripts/review_campaign.py status CAMPAIGN_ID
+.venv/bin/python scripts/review_campaign.py report CAMPAIGN_ID
+```
+
+The campaign runner preserves the model's natural policy decision. Naturally uncertain cases reuse their policy-created task; auto-accepted controls receive a separate `campaign_control` task. Reference labels are stored only in campaign persistence and are absent from review queue responses, templates, and feedback training JSONL.
 
 ### Implemented production baseline
 - Production fails startup when authentication secrets or allowed hosts are missing.

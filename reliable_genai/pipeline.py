@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 from .classifier import CalibratedTextClassifier
 from .llm_wrappers import GitHubModelsClient
 from .models import (
+    CATALOG_LABELS,
     ClassifierResult,
     PredictionResponse,
     ProductAttributes,
@@ -35,14 +36,7 @@ class AttributeExtractionStageResult:
 class ReliabilityPipeline:
     """Minimal uncertainty-aware pipeline for demo purposes."""
 
-    LABELS = [
-        "Shoes",
-        "Clothing",
-        "Electronics",
-        "Home",
-        "Beauty",
-        "Sports",
-    ]
+    LABELS = list(CATALOG_LABELS)
 
     KEYWORDS: Dict[str, List[str]] = {
         "Shoes": ["shoe", "sneaker", "boot", "running"],

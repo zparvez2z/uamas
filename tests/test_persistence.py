@@ -201,6 +201,53 @@ def test_store_does_not_overwrite_resolved_review_decision(
     assert store.get_review_task(task.id) == approved
 
 
+def test_store_rejects_ambiguous_prediction_approval(tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    listing_id = store.create_listing(
+        ListingInput(title="ambiguous", description="description")
+    )
+    prediction = _prediction().model_copy(deep=True)
+    prediction.category_set = ["Shoes", "Sports"]
+    prediction.reliability.set_size = 2
+    prediction_id = store.create_prediction(listing_id, prediction)
+    task = store.create_review_task(
+        listing_id=listing_id,
+        prediction_id=prediction_id,
+        reason="large_set",
+    )
+
+    with pytest.raises(ValueError, match="single predicted category"):
+        store.record_review_decision(
+            task.id,
+            ReviewDecision(action="approve"),
+        )
+
+    assert store.get_review_task(task.id).status == "pending"
+
+
+def test_store_rejects_unknown_corrected_category(tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    listing_id = store.create_listing(
+        ListingInput(title="item", description="description")
+    )
+    task = store.create_review_task(
+        listing_id=listing_id,
+        prediction_id=None,
+        reason="review",
+    )
+
+    with pytest.raises(ValueError, match="corrected category must be one of"):
+        store.record_review_decision(
+            task.id,
+            ReviewDecision(
+                action="correct",
+                corrected_category="Unsupported",
+            ),
+        )
+
+    assert store.get_review_task(task.id).status == "pending"
+
+
 def test_store_persists_completed_workflow_and_agent_history(tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
     workflow = store.start_workflow_run(

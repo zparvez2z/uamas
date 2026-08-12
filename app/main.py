@@ -419,10 +419,19 @@ def api_metrics() -> OperationalMetrics:
     response_class=HTMLResponse,
     dependencies=[Depends(require_admin_access)],
 )
-def review_queue_page(request: Request, status: str = "pending", limit: int = 100) -> HTMLResponse:
+def review_queue_page(
+    request: Request,
+    status: str = "pending",
+    limit: int = 100,
+    campaign_id: str = "",
+) -> HTMLResponse:
     selected_status = None if status == "all" else status
     try:
-        tasks = review_store.list_review_tasks(status=selected_status, limit=limit)
+        tasks = review_store.list_review_tasks(
+            status=selected_status,
+            limit=limit,
+            campaign_id=campaign_id or None,
+        )
         error = None
     except ValueError as exc:
         tasks = []
@@ -434,6 +443,8 @@ def review_queue_page(request: Request, status: str = "pending", limit: int = 10
             "tasks": tasks,
             "status": status,
             "limit": limit,
+            "campaign_id": campaign_id,
+            "category_labels": ReliabilityPipeline.LABELS,
             "error": error,
             "diagnostics": build_diagnostics(),
             "csrf_token": security.csrf_token(request),
@@ -482,11 +493,30 @@ def analyze_listing(listing: ListingInput) -> CatalogQualityDecision:
     response_model=list[ReviewQueueItem],
     dependencies=[Depends(require_operator_access)],
 )
-def list_review_queue(status: str = "pending", limit: int = 100) -> list[ReviewQueueItem]:
+def list_review_queue(
+    status: str = "pending",
+    limit: int = 100,
+    campaign_id: str = "",
+) -> list[ReviewQueueItem]:
     try:
-        return review_store.list_review_tasks(status=status or None, limit=limit)
+        return review_store.list_review_tasks(
+            status=status or None,
+            limit=limit,
+            campaign_id=campaign_id or None,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get(
+    "/api/review-campaigns/{campaign_id}",
+    dependencies=[Depends(require_operator_access)],
+)
+def get_review_campaign_status(campaign_id: str) -> dict[str, object]:
+    try:
+        return review_store.review_campaign_status(campaign_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get(

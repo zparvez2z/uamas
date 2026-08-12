@@ -273,6 +273,11 @@ class FeedbackExporter:
                 "completed_at": row.get("workflow_completed_at"),
                 "history_pruned_at": row.get("history_pruned_at"),
             },
+            "campaign": {
+                "id": row.get("campaign_id"),
+                "source_product_id": row.get("campaign_source_product_id"),
+                "selection_type": row.get("campaign_selection_type"),
+            },
             "derived": {
                 "original_category": original_category,
                 "effective_category": effective_category,
@@ -327,6 +332,13 @@ class FeedbackExporter:
                 "review_reason": record["review"]["reason"],
                 "decided_at": record["review"]["decided_at"],
                 "original_category_set": record["prediction"]["category_set"],
+                "campaign_id": record["campaign"]["id"],
+                "campaign_source_product_id": record["campaign"][
+                    "source_product_id"
+                ],
+                "campaign_selection_type": record["campaign"][
+                    "selection_type"
+                ],
             },
         }
 

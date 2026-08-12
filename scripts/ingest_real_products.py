@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest real product data into the UAMAS train/calibration/test format."""
+"""Ingest real product data into disjoint UAMAS model and feedback splits."""
 
 from __future__ import annotations
 
@@ -16,7 +16,14 @@ from typing import Any, Iterable
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.load_dataset import SplitConfig, split_rows, write_json
+from scripts.load_dataset import (
+    SplitConfig,
+    partition_feedback_pool,
+    split_fingerprint,
+    split_rows,
+    validate_disjoint_splits,
+    write_json,
+)
 from reliable_genai.models import bound_product_text
 
 
@@ -311,6 +318,7 @@ def normalize_rows(source_rows: list[dict[str, Any]], *, sample_size: int, max_p
 
 
 def write_metadata(path: Path, *, source: str, split_seed: int, ingestion: IngestionResult, splits: dict[str, list[dict[str, str]]]) -> None:
+    validate_disjoint_splits(splits)
     metadata = {
         "source": source,
         "source_url": "https://huggingface.co/datasets/Shopify/product-catalogue"
@@ -318,9 +326,13 @@ def write_metadata(path: Path, *, source: str, split_seed: int, ingestion: Inges
         else None,
         "ingested_at_utc": datetime.now(timezone.utc).isoformat(),
         "split_seed": split_seed,
-        "mapping_version": 1,
+        "mapping_version": 2,
         **ingestion.metadata,
         "split_counts": {name: len(rows) for name, rows in splits.items()},
+        "split_fingerprints_sha256": {
+            name: split_fingerprint(rows) for name, rows in splits.items()
+        },
+        "split_id_field": "ean",
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
@@ -345,6 +357,12 @@ def parse_args() -> argparse.Namespace:
         help="Keep image columns when reading Hugging Face source. Default drops them for text-only ingestion.",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--feedback-per-category",
+        type=int,
+        default=0,
+        help="Move this many rows per category from test to feedback_pool.",
+    )
     return parser.parse_args()
 
 
@@ -381,9 +399,15 @@ def main() -> None:
         raise SystemExit("No rows were mapped into the target taxonomy")
 
     splits = split_rows(ingestion.rows, SplitConfig(seed=args.seed))
+    splits = partition_feedback_pool(
+        splits,
+        per_category=args.feedback_per_category,
+        seed=args.seed,
+    )
     write_json(args.output_dir / "train.json", splits["train"])
     write_json(args.output_dir / "calibration.json", splits["calibration"])
     write_json(args.output_dir / "test.json", splits["test"])
+    write_json(args.output_dir / "feedback_pool.json", splits["feedback_pool"])
     write_metadata(
         args.output_dir / "dataset_metadata.json",
         source=source_name,
@@ -399,7 +423,8 @@ def main() -> None:
         "Split sizes: "
         f"train={len(splits['train'])}, "
         f"calibration={len(splits['calibration'])}, "
-        f"test={len(splits['test'])}"
+        f"test={len(splits['test'])}, "
+        f"feedback_pool={len(splits['feedback_pool'])}"
     )
 
 

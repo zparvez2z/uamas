@@ -12,6 +12,7 @@ from typing import Any
 
 from .models import (
     AgentRun,
+    CATALOG_LABELS,
     ListingInput,
     PredictionResponse,
     ReviewDecision,
@@ -175,6 +176,49 @@ class SQLiteReviewStore:
 
                 CREATE INDEX IF NOT EXISTS idx_feedback_export_batches_completed
                     ON feedback_export_batches(completed_at DESC);
+
+                CREATE TABLE IF NOT EXISTS review_campaigns (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    source_split TEXT NOT NULL,
+                    dataset_fingerprint TEXT NOT NULL,
+                    seed INTEGER NOT NULL,
+                    per_category INTEGER NOT NULL,
+                    runtime_mode TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    config_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    completed_at TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS review_campaign_items (
+                    id TEXT PRIMARY KEY,
+                    campaign_id TEXT NOT NULL,
+                    source_product_id TEXT NOT NULL,
+                    reference_category TEXT NOT NULL,
+                    source_row_json TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    listing_id TEXT,
+                    prediction_id TEXT,
+                    workflow_run_id TEXT,
+                    review_task_id TEXT UNIQUE,
+                    natural_decision TEXT,
+                    selection_type TEXT,
+                    error_type TEXT,
+                    error_message TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(campaign_id) REFERENCES review_campaigns(id),
+                    FOREIGN KEY(listing_id) REFERENCES listings(id),
+                    FOREIGN KEY(prediction_id) REFERENCES predictions(id),
+                    FOREIGN KEY(workflow_run_id) REFERENCES workflow_runs(id),
+                    FOREIGN KEY(review_task_id) REFERENCES review_tasks(id),
+                    UNIQUE(campaign_id, source_product_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_review_campaign_items_state
+                    ON review_campaign_items(campaign_id, state, created_at);
                 """
             )
             workflow_columns = {
@@ -495,7 +539,13 @@ class SQLiteReviewStore:
             ).fetchone()
         return self._task_from_row(row) if row else None
 
-    def list_review_tasks(self, *, status: str | None = None, limit: int = 100) -> list[ReviewQueueItem]:
+    def list_review_tasks(
+        self,
+        *,
+        status: str | None = None,
+        limit: int = 100,
+        campaign_id: str | None = None,
+    ) -> list[ReviewQueueItem]:
         if limit <= 0:
             raise ValueError("limit must be positive")
 
@@ -503,20 +553,32 @@ class SQLiteReviewStore:
             SELECT
                 review_tasks.*,
                 listings.title AS title,
-                listings.description AS description
+                listings.description AS description,
+                predictions.category_set_json,
+                predictions.attributes_json,
+                predictions.reliability_json,
+                review_campaign_items.campaign_id
             FROM review_tasks
             JOIN listings ON listings.id = review_tasks.listing_id
+            LEFT JOIN predictions ON predictions.id = review_tasks.prediction_id
+            LEFT JOIN review_campaign_items
+                ON review_campaign_items.review_task_id = review_tasks.id
         """
-        params: tuple[Any, ...]
-        if status is None:
-            query += " ORDER BY review_tasks.updated_at DESC LIMIT ?"
-            params = (limit,)
-        else:
-            query += " WHERE review_tasks.status = ? ORDER BY review_tasks.updated_at DESC LIMIT ?"
-            params = (status, limit)
+        clauses: list[str] = []
+        params_list: list[Any] = []
+        if status is not None:
+            clauses.append("review_tasks.status = ?")
+            params_list.append(status)
+        if campaign_id is not None:
+            clauses.append("review_campaign_items.campaign_id = ?")
+            params_list.append(campaign_id)
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY review_tasks.updated_at DESC LIMIT ?"
+        params_list.append(limit)
 
         with self._connect() as conn:
-            rows = conn.execute(query, params).fetchall()
+            rows = conn.execute(query, tuple(params_list)).fetchall()
         return [self._queue_item_from_row(row) for row in rows]
 
     def complete_workflow_run(
@@ -637,9 +699,41 @@ class SQLiteReviewStore:
 
     def record_review_decision(self, task_id: str, decision: ReviewDecision) -> ReviewTask:
         status = REVIEW_DECISION_STATUS[decision.action]
+        if (
+            decision.corrected_category is not None
+            and decision.corrected_category not in CATALOG_LABELS
+        ):
+            raise ValueError(
+                "corrected category must be one of: "
+                + ", ".join(CATALOG_LABELS)
+            )
         now = utc_now()
         with self._write_lock:
             with self._connect() as conn:
+                if decision.action in {"approve", "correct"}:
+                    prediction_row = conn.execute(
+                        """
+                        SELECT predictions.category_set_json
+                        FROM review_tasks
+                        LEFT JOIN predictions
+                            ON predictions.id = review_tasks.prediction_id
+                        WHERE review_tasks.id = ?
+                        """,
+                        (task_id,),
+                    ).fetchone()
+                    if prediction_row is not None and prediction_row[0] is not None:
+                        category_set = json.loads(prediction_row[0])
+                        if len(category_set) != 1:
+                            if decision.action == "approve":
+                                raise ValueError(
+                                    "approval requires a single predicted "
+                                    "category; submit an explicit correction"
+                                )
+                            if not decision.corrected_category:
+                                raise ValueError(
+                                    "ambiguous predictions require an explicit "
+                                    "corrected category"
+                                )
                 cursor = conn.execute(
                     """
                     UPDATE review_tasks
@@ -671,10 +765,299 @@ class SQLiteReviewStore:
                         f"review task is already resolved: {task_id} "
                         f"({existing['status']})"
                     )
+                campaign_row = conn.execute(
+                    """
+                    SELECT campaign_id
+                    FROM review_campaign_items
+                    WHERE review_task_id = ?
+                    """,
+                    (task_id,),
+                ).fetchone()
+                if campaign_row is not None:
+                    self._refresh_campaign_status(conn, campaign_row[0], now=now)
         task = self.get_review_task(task_id)
         if task is None:
             raise KeyError(f"review task not found: {task_id}")
         return task
+
+    def create_review_campaign(
+        self,
+        *,
+        campaign_id: str,
+        name: str,
+        source_split: str,
+        dataset_fingerprint: str,
+        seed: int,
+        per_category: int,
+        runtime_mode: str,
+        config: dict[str, object],
+        items: list[dict[str, object]],
+    ) -> dict[str, object]:
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                existing = conn.execute(
+                    "SELECT * FROM review_campaigns WHERE id = ?",
+                    (campaign_id,),
+                ).fetchone()
+                if existing is not None:
+                    return self._campaign_from_row(existing)
+                conn.execute(
+                    """
+                    INSERT INTO review_campaigns (
+                        id, name, source_split, dataset_fingerprint, seed,
+                        per_category, runtime_mode, status, config_json,
+                        created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?)
+                    """,
+                    (
+                        campaign_id,
+                        name,
+                        source_split,
+                        dataset_fingerprint,
+                        seed,
+                        per_category,
+                        runtime_mode,
+                        json.dumps(config, sort_keys=True),
+                        now,
+                        now,
+                    ),
+                )
+                conn.executemany(
+                    """
+                    INSERT INTO review_campaign_items (
+                        id, campaign_id, source_product_id,
+                        reference_category, source_row_json, state,
+                        created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, 'selected', ?, ?)
+                    """,
+                    [
+                        (
+                            str(item["id"]),
+                            campaign_id,
+                            str(item["source_product_id"]),
+                            str(item["reference_category"]),
+                            json.dumps(item["source_row"], ensure_ascii=False),
+                            now,
+                            now,
+                        )
+                        for item in items
+                    ],
+                )
+        campaign = self.get_review_campaign(campaign_id)
+        if campaign is None:
+            raise RuntimeError(f"failed to create campaign {campaign_id}")
+        return campaign
+
+    def get_review_campaign(self, campaign_id: str) -> dict[str, object] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM review_campaigns WHERE id = ?",
+                (campaign_id,),
+            ).fetchone()
+        return self._campaign_from_row(row) if row else None
+
+    def claim_review_campaign_items(
+        self,
+        campaign_id: str,
+        *,
+        limit: int,
+        retry_failed: bool = False,
+    ) -> list[dict[str, object]]:
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        states = ("selected", "failed") if retry_failed else ("selected",)
+        placeholders = ",".join("?" for _ in states)
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    f"""
+                    SELECT * FROM review_campaign_items
+                    WHERE campaign_id = ? AND state IN ({placeholders})
+                    ORDER BY created_at, id
+                    LIMIT ?
+                    """,
+                    (campaign_id, *states, limit),
+                ).fetchall()
+                item_ids = [row["id"] for row in rows]
+                if item_ids:
+                    conn.executemany(
+                        """
+                        UPDATE review_campaign_items
+                        SET state = 'processing', error_type = NULL,
+                            error_message = NULL, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        [(now, item_id) for item_id in item_ids],
+                    )
+                    conn.execute(
+                        """
+                        UPDATE review_campaigns
+                        SET status = 'running', updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (now, campaign_id),
+                    )
+        return [self._campaign_item_from_row(row) for row in rows]
+
+    def recover_processing_review_campaign_items(
+        self,
+        campaign_id: str,
+    ) -> int:
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE review_campaign_items
+                    SET state = 'failed',
+                        error_type = 'InterruptedCampaignRun',
+                        error_message = 'recovered by explicit operator action',
+                        updated_at = ?
+                    WHERE campaign_id = ? AND state = 'processing'
+                    """,
+                    (now, campaign_id),
+                )
+                self._refresh_campaign_status(conn, campaign_id, now=now)
+        return int(cursor.rowcount)
+
+    def complete_review_campaign_item(
+        self,
+        item_id: str,
+        *,
+        listing_id: str,
+        prediction_id: str,
+        workflow_run_id: str,
+        review_task_id: str,
+        natural_decision: str,
+        selection_type: str,
+    ) -> None:
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE review_campaign_items
+                    SET state = 'queued', listing_id = ?, prediction_id = ?,
+                        workflow_run_id = ?, review_task_id = ?,
+                        natural_decision = ?, selection_type = ?,
+                        updated_at = ?
+                    WHERE id = ? AND state = 'processing'
+                    """,
+                    (
+                        listing_id,
+                        prediction_id,
+                        workflow_run_id,
+                        review_task_id,
+                        natural_decision,
+                        selection_type,
+                        now,
+                        item_id,
+                    ),
+                )
+                if cursor.rowcount == 0:
+                    raise KeyError(f"campaign item is not processing: {item_id}")
+                campaign_id = conn.execute(
+                    "SELECT campaign_id FROM review_campaign_items WHERE id = ?",
+                    (item_id,),
+                ).fetchone()[0]
+                self._refresh_campaign_status(conn, campaign_id, now=now)
+
+    def fail_review_campaign_item(
+        self,
+        item_id: str,
+        *,
+        error_type: str,
+        error_message: str,
+    ) -> None:
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE review_campaign_items
+                    SET state = 'failed', error_type = ?, error_message = ?,
+                        updated_at = ?
+                    WHERE id = ? AND state = 'processing'
+                    """,
+                    (
+                        error_type,
+                        self._bounded_error(error_message),
+                        now,
+                        item_id,
+                    ),
+                )
+                if cursor.rowcount == 0:
+                    raise KeyError(f"campaign item is not processing: {item_id}")
+                campaign_id = conn.execute(
+                    "SELECT campaign_id FROM review_campaign_items WHERE id = ?",
+                    (item_id,),
+                ).fetchone()[0]
+                self._refresh_campaign_status(conn, campaign_id, now=now)
+
+    def review_campaign_status(self, campaign_id: str) -> dict[str, object]:
+        campaign = self.get_review_campaign(campaign_id)
+        if campaign is None:
+            raise KeyError(f"review campaign not found: {campaign_id}")
+        with self._connect() as conn:
+            state_rows = conn.execute(
+                """
+                SELECT state, COUNT(*) AS count
+                FROM review_campaign_items
+                WHERE campaign_id = ?
+                GROUP BY state
+                """,
+                (campaign_id,),
+            ).fetchall()
+            review_rows = conn.execute(
+                """
+                SELECT review_tasks.status, COUNT(*) AS count
+                FROM review_campaign_items
+                JOIN review_tasks
+                    ON review_tasks.id = review_campaign_items.review_task_id
+                WHERE review_campaign_items.campaign_id = ?
+                GROUP BY review_tasks.status
+                """,
+                (campaign_id,),
+            ).fetchall()
+        campaign["item_state_counts"] = {
+            row["state"]: int(row["count"]) for row in state_rows
+        }
+        campaign["review_status_counts"] = {
+            row["status"]: int(row["count"]) for row in review_rows
+        }
+        campaign["selected_count"] = sum(campaign["item_state_counts"].values())
+        return campaign
+
+    def list_review_campaign_report_rows(
+        self,
+        campaign_id: str,
+    ) -> list[dict[str, object]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    review_campaign_items.*,
+                    review_tasks.status AS review_status,
+                    review_tasks.reason AS review_reason,
+                    review_tasks.corrected_category,
+                    predictions.category_set_json,
+                    predictions.reliability_json
+                FROM review_campaign_items
+                LEFT JOIN review_tasks
+                    ON review_tasks.id = review_campaign_items.review_task_id
+                LEFT JOIN predictions
+                    ON predictions.id = review_campaign_items.prediction_id
+                WHERE review_campaign_items.campaign_id = ?
+                ORDER BY review_campaign_items.created_at,
+                         review_campaign_items.id
+                """,
+                (campaign_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def list_feedback_export_candidates(self) -> list[dict[str, object]]:
         with self._connect() as conn:
@@ -706,7 +1089,10 @@ class SQLiteReviewStore:
                     workflow_runs.graph_backend,
                     workflow_runs.started_at AS workflow_started_at,
                     workflow_runs.completed_at AS workflow_completed_at,
-                    workflow_runs.history_pruned_at
+                    workflow_runs.history_pruned_at,
+                    review_campaign_items.campaign_id,
+                    review_campaign_items.source_product_id AS campaign_source_product_id,
+                    review_campaign_items.selection_type AS campaign_selection_type
                 FROM review_tasks
                 JOIN listings
                     ON listings.id = review_tasks.listing_id
@@ -720,6 +1106,8 @@ class SQLiteReviewStore:
                         ORDER BY candidate_workflow.started_at DESC
                         LIMIT 1
                     )
+                LEFT JOIN review_campaign_items
+                    ON review_campaign_items.review_task_id = review_tasks.id
                 WHERE review_tasks.status IN (
                     'approved',
                     'corrected',
@@ -1385,8 +1773,103 @@ class SQLiteReviewStore:
     @classmethod
     def _queue_item_from_row(cls, row: sqlite3.Row) -> ReviewQueueItem:
         task = cls._task_from_row(row)
+        prediction = None
+        if row["category_set_json"] is not None:
+            prediction = PredictionResponse(
+                category_set=json.loads(row["category_set_json"]),
+                attributes=json.loads(row["attributes_json"]),
+                reliability=json.loads(row["reliability_json"]),
+            )
         return ReviewQueueItem(
             **task.model_dump(),
             title=row["title"],
             description=row["description"],
+            prediction=prediction,
+            campaign_id=row["campaign_id"],
+        )
+
+    @staticmethod
+    def _campaign_from_row(row: sqlite3.Row) -> dict[str, object]:
+        return {
+            "id": row["id"],
+            "name": row["name"],
+            "source_split": row["source_split"],
+            "dataset_fingerprint": row["dataset_fingerprint"],
+            "seed": int(row["seed"]),
+            "per_category": int(row["per_category"]),
+            "runtime_mode": row["runtime_mode"],
+            "status": row["status"],
+            "config": json.loads(row["config_json"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "completed_at": row["completed_at"],
+        }
+
+    @staticmethod
+    def _campaign_item_from_row(row: sqlite3.Row) -> dict[str, object]:
+        return {
+            "id": row["id"],
+            "campaign_id": row["campaign_id"],
+            "source_product_id": row["source_product_id"],
+            "reference_category": row["reference_category"],
+            "source_row": json.loads(row["source_row_json"]),
+            "state": row["state"],
+            "listing_id": row["listing_id"],
+            "prediction_id": row["prediction_id"],
+            "workflow_run_id": row["workflow_run_id"],
+            "review_task_id": row["review_task_id"],
+            "natural_decision": row["natural_decision"],
+            "selection_type": row["selection_type"],
+            "error_type": row["error_type"],
+            "error_message": row["error_message"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    @staticmethod
+    def _refresh_campaign_status(
+        conn: sqlite3.Connection,
+        campaign_id: str,
+        *,
+        now: str,
+    ) -> None:
+        state_counts = {
+            row["state"]: int(row["count"])
+            for row in conn.execute(
+                """
+                SELECT state, COUNT(*) AS count
+                FROM review_campaign_items
+                WHERE campaign_id = ?
+                GROUP BY state
+                """,
+                (campaign_id,),
+            ).fetchall()
+        }
+        if state_counts.get("selected", 0) or state_counts.get("processing", 0):
+            status = "running"
+        elif state_counts.get("failed", 0):
+            status = "failed"
+        else:
+            pending_reviews = int(
+                conn.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM review_campaign_items
+                    JOIN review_tasks
+                        ON review_tasks.id = review_campaign_items.review_task_id
+                    WHERE review_campaign_items.campaign_id = ?
+                      AND review_tasks.status = 'pending'
+                    """,
+                    (campaign_id,),
+                ).fetchone()[0]
+            )
+            status = "reviewing" if pending_reviews else "completed"
+        conn.execute(
+            """
+            UPDATE review_campaigns
+            SET status = ?, updated_at = ?,
+                completed_at = CASE WHEN ? = 'completed' THEN ? ELSE NULL END
+            WHERE id = ?
+            """,
+            (status, now, status, now, campaign_id),
         )

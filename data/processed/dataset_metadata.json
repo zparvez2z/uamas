@@ -3,7 +3,7 @@
   "source_url": "https://huggingface.co/datasets/Shopify/product-catalogue",
   "ingested_at_utc": "2026-06-06T14:19:08.876141+00:00",
   "split_seed": 42,
-  "mapping_version": 1,
+  "mapping_version": 2,
   "source_rows": 48289,
   "normalized_rows": 27108,
   "skipped_counts": {
@@ -28,6 +28,15 @@
   "split_counts": {
     "train": 18972,
     "calibration": 4063,
-    "test": 4073
-  }
+    "test": 3953,
+    "feedback_pool": 120
+  },
+  "feedback_pool_per_category": 20,
+  "split_fingerprints_sha256": {
+    "test": "2792236745637cece27a5123e8b2a3ce6081660463cf913e9ec79b958b4c84d2",
+    "feedback_pool": "4c0fe4f35b82c75593d1454177b0f1f927e220c9d400db3d94a42a0052ceb8d2",
+    "train": "8333cec09342aedaa474d53ce782100ca175d03870c93a8ee5370f8dce53eec5",
+    "calibration": "ef43f180c6322f855c290d9742ac49fe9656303b85c728e8ec215277294b736e"
+  },
+  "split_id_field": "ean"
 }

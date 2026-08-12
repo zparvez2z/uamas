@@ -32,13 +32,14 @@
         <div><span>Shown</span><strong>{{ tasks|length }}</strong></div>
         <div><span>Pending total</span><strong>{{ diagnostics.pending_review_task_count }}</strong></div>
         <div><span>All review tasks</span><strong>{{ diagnostics.review_task_count }}</strong></div>
+        <div><span>Campaign</span><strong>{{ campaign_id or "All" }}</strong></div>
       </div>
       <div class="actions-row">
-        <a class="link-btn" href="/review?status=pending">Pending</a>
-        <a class="link-btn" href="/review?status=all">All</a>
-        <a class="link-btn" href="/review?status=approved">Approved</a>
-        <a class="link-btn" href="/review?status=corrected">Corrected</a>
-        <a class="link-btn" href="/review?status=rejected">Rejected</a>
+        <a class="link-btn" href="/review?status=pending&amp;campaign_id={{ campaign_id }}">Pending</a>
+        <a class="link-btn" href="/review?status=all&amp;campaign_id={{ campaign_id }}">All</a>
+        <a class="link-btn" href="/review?status=approved&amp;campaign_id={{ campaign_id }}">Approved</a>
+        <a class="link-btn" href="/review?status=corrected&amp;campaign_id={{ campaign_id }}">Corrected</a>
+        <a class="link-btn" href="/review?status=rejected&amp;campaign_id={{ campaign_id }}">Rejected</a>
       </div>
       {% if error %}
       <div class="error">{{ error }}</div>
@@ -61,15 +62,38 @@
           <div><span>Updated</span><strong>{{ task.updated_at }}</strong></div>
           <div><span>Listing</span><strong>{{ task.listing_id }}</strong></div>
           <div><span>Prediction</span><strong>{{ task.prediction_id or "None" }}</strong></div>
+          {% if task.campaign_id %}
+          <div><span>Campaign</span><strong>{{ task.campaign_id }}</strong></div>
+          {% endif %}
         </div>
+
+        {% if task.prediction %}
+        <div class="prediction-review-panel">
+          <h3>Model Output</h3>
+          <div class="diagnostics-grid review-meta-grid">
+            <div><span>Categories</span><strong>{{ task.prediction.category_set|join(", ") or "Abstained" }}</strong></div>
+            <div><span>Confidence</span><strong>{{ "%.3f"|format(task.prediction.reliability.confidence) }}</strong></div>
+            <div><span>Set size</span><strong>{{ task.prediction.reliability.set_size }}</strong></div>
+            <div><span>Semantic status</span><strong>{{ task.prediction.reliability.semantic_consistency_status }}</strong></div>
+            <div><span>Semantic score</span><strong>{{ task.prediction.reliability.semantic_consistency_score if task.prediction.reliability.semantic_consistency_score is not none else "Unavailable" }}</strong></div>
+            <div><span>LLM runtime</span><strong>{{ task.prediction.reliability.llm_runtime }}</strong></div>
+            <div><span>Brand</span><strong>{{ task.prediction.attributes.brand }}</strong></div>
+            <div><span>Color</span><strong>{{ task.prediction.attributes.color }}</strong></div>
+            <div><span>Material</span><strong>{{ task.prediction.attributes.material }}</strong></div>
+            <div><span>Size</span><strong>{{ task.prediction.attributes.size }}</strong></div>
+          </div>
+        </div>
+        {% endif %}
 
         {% if task.status == "pending" %}
         <div class="review-actions">
+          {% if task.prediction and task.prediction.category_set|length == 1 %}
           <form method="post" action="/review/{{ task.id }}/decision" class="inline-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="action" value="approve">
             <button type="submit">Approve</button>
           </form>
+          {% endif %}
 
           <form method="post" action="/review/{{ task.id }}/decision" class="inline-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -82,12 +106,16 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="action" value="correct">
           <label for="corrected-category-{{ task.id }}">Corrected Category</label>
-          <input
+          <select
             id="corrected-category-{{ task.id }}"
             name="corrected_category"
-            type="text"
-            placeholder="e.g., Sports"
+            required
           >
+            <option value="" selected disabled>Select category</option>
+            {% for category in category_labels %}
+            <option value="{{ category }}">{{ category }}</option>
+            {% endfor %}
+          </select>
 
           <label for="corrected-attributes-{{ task.id }}">Corrected Attributes JSON</label>
           <textarea

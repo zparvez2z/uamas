@@ -5,6 +5,14 @@ from pydantic import BaseModel, Field
 
 PRODUCT_TITLE_MAX_LENGTH = 500
 PRODUCT_DESCRIPTION_MAX_LENGTH = 10_000
+CATALOG_LABELS = (
+    "Shoes",
+    "Clothing",
+    "Electronics",
+    "Home",
+    "Beauty",
+    "Sports",
+)
 
 
 def bound_product_text(*, title: str, description: str) -> tuple[str, str]:
@@ -106,6 +114,8 @@ class ReviewTask(BaseModel):
 class ReviewQueueItem(ReviewTask):
     title: str
     description: str = ""
+    prediction: Optional[PredictionResponse] = None
+    campaign_id: Optional[str] = None
 
 
 class ReviewDecision(BaseModel):

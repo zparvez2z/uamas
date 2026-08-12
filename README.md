@@ -44,15 +44,17 @@ Implemented:
 - semantic consistency scoring using a second embedding model,
 - deterministic policy routing and a browser-based human-review queue,
 - durable SQLite workflow and per-agent execution history,
+- leakage-safe review campaigns over a dedicated feedback pool,
+- validated, deduplicated feedback exports and correction reports,
 - production fail-closed authentication and CSRF-protected review actions,
 - audited retention cleanup with dry-run preview and pre-change backups,
 - operational diagnostics, metrics, dashboard, and evaluation artifacts,
 - mock mode, live GitHub Models mode, automated CI, and a manual live smoke workflow.
 
 Next:
-- export resolved human reviews as validated feedback evidence,
-- calculate correction rates by category and review reason,
-- and prepare versioned retraining input with evaluation-gated artifact promotion.
+- run and resolve the first balanced review campaign,
+- train a candidate classifier from eligible reviewer evidence,
+- and compare it against the active artifact before explicit promotion.
 
 See [TECHNICAL.md](TECHNICAL.md) for the implementation details and current engineering roadmap.
 
@@ -162,12 +164,37 @@ Current processed data:
 - 27,108 normalized listings,
 - 18,972 training examples,
 - 4,063 calibration examples,
-- 4,073 test examples,
+- 3,953 untouched test examples,
+- 120 balanced feedback-pool examples,
 - six target categories: Beauty, Clothing, Electronics, Home, Shoes, and Sports.
 
 Large upstream cache files are intentionally not stored in the repository. Source provenance, category counts, and split metadata are recorded in `data/processed/dataset_metadata.json`.
 
 No private company data is included.
+
+## Review Campaigns
+
+Preview a deterministic, balanced campaign without model or database writes:
+
+```bash
+USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+  plan --name baseline-01 --per-category 20 --seed 42
+```
+
+Create it, then process bounded batches:
+
+```bash
+USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+  create --name baseline-01 --per-category 20 --seed 42
+
+USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+  run CAMPAIGN_ID --limit 20
+
+.venv/bin/python scripts/review_campaign.py status CAMPAIGN_ID
+.venv/bin/python scripts/review_campaign.py report CAMPAIGN_ID
+```
+
+Review queued items at `/review?campaign_id=CAMPAIGN_ID`. Dataset reference labels remain hidden from reviewer HTML and APIs; they are used only for aggregate post-review comparison.
 
 ## Validation
 
