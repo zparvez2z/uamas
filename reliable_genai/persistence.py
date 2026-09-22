@@ -189,7 +189,9 @@ class SQLiteReviewStore:
                     config_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    completed_at TEXT
+                    completed_at TEXT,
+                    invalidated_at TEXT,
+                    invalidation_reason TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS review_campaign_items (
@@ -228,6 +230,18 @@ class SQLiteReviewStore:
             if "history_pruned_at" not in workflow_columns:
                 conn.execute(
                     "ALTER TABLE workflow_runs ADD COLUMN history_pruned_at TEXT"
+                )
+            campaign_columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(review_campaigns)").fetchall()
+            }
+            if "invalidated_at" not in campaign_columns:
+                conn.execute(
+                    "ALTER TABLE review_campaigns ADD COLUMN invalidated_at TEXT"
+                )
+            if "invalidation_reason" not in campaign_columns:
+                conn.execute(
+                    "ALTER TABLE review_campaigns ADD COLUMN invalidation_reason TEXT"
                 )
         self._set_private_file_permissions(self.db_path)
 
@@ -538,6 +552,36 @@ class SQLiteReviewStore:
                 (task_id,),
             ).fetchone()
         return self._task_from_row(row) if row else None
+
+    def cancel_review_task(self, task_id: str, *, reason: str) -> ReviewTask:
+        now = utc_now()
+        clean_reason = self._bounded_error(reason.strip())
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE review_tasks
+                    SET status = 'cancelled', notes = ?, updated_at = ?
+                    WHERE id = ? AND status = 'pending'
+                    """,
+                    (clean_reason or None, now, task_id),
+                )
+                if cursor.rowcount == 0:
+                    existing = conn.execute(
+                        "SELECT status FROM review_tasks WHERE id = ?",
+                        (task_id,),
+                    ).fetchone()
+                    if existing is None:
+                        raise KeyError(f"review task not found: {task_id}")
+                    if existing["status"] != "cancelled":
+                        raise ValueError(
+                            f"review task cannot be cancelled: {task_id} "
+                            f"({existing['status']})"
+                        )
+        task = self.get_review_task(task_id)
+        if task is None:
+            raise RuntimeError(f"failed to cancel review task {task_id}")
+        return task
 
     def list_review_tasks(
         self,
@@ -873,6 +917,14 @@ class SQLiteReviewStore:
         now = utc_now()
         with self._write_lock:
             with self._connect() as conn:
+                campaign = conn.execute(
+                    "SELECT status FROM review_campaigns WHERE id = ?",
+                    (campaign_id,),
+                ).fetchone()
+                if campaign is None:
+                    raise KeyError(f"review campaign not found: {campaign_id}")
+                if campaign["status"] == "invalidated":
+                    raise ValueError(f"review campaign is invalidated: {campaign_id}")
                 rows = conn.execute(
                     f"""
                     SELECT * FROM review_campaign_items
@@ -903,6 +955,65 @@ class SQLiteReviewStore:
                     )
         return [self._campaign_item_from_row(row) for row in rows]
 
+    def invalidate_review_campaign(
+        self,
+        campaign_id: str,
+        *,
+        reason: str,
+    ) -> dict[str, object]:
+        clean_reason = self._bounded_error(reason.strip())
+        if not clean_reason:
+            raise ValueError("invalidation reason must not be empty")
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                campaign = conn.execute(
+                    "SELECT status FROM review_campaigns WHERE id = ?",
+                    (campaign_id,),
+                ).fetchone()
+                if campaign is None:
+                    raise KeyError(f"review campaign not found: {campaign_id}")
+                if campaign["status"] != "invalidated":
+                    conn.execute(
+                        """
+                        UPDATE review_tasks
+                        SET status = 'cancelled', updated_at = ?
+                        WHERE status = 'pending'
+                          AND id IN (
+                              SELECT review_task_id
+                              FROM review_campaign_items
+                              WHERE campaign_id = ?
+                                AND review_task_id IS NOT NULL
+                          )
+                        """,
+                        (now, campaign_id),
+                    )
+                    conn.execute(
+                        """
+                        UPDATE review_campaign_items
+                        SET state = 'invalidated',
+                            error_type = 'CampaignInvalidated',
+                            error_message = ?,
+                            updated_at = ?
+                        WHERE campaign_id = ?
+                          AND state IN ('selected', 'processing', 'failed')
+                        """,
+                        (clean_reason, now, campaign_id),
+                    )
+                    conn.execute(
+                        """
+                        UPDATE review_campaigns
+                        SET status = 'invalidated', invalidated_at = ?,
+                            invalidation_reason = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (now, clean_reason, now, campaign_id),
+                    )
+        campaign_result = self.get_review_campaign(campaign_id)
+        if campaign_result is None:
+            raise RuntimeError(f"failed to invalidate campaign {campaign_id}")
+        return campaign_result
+
     def recover_processing_review_campaign_items(
         self,
         campaign_id: str,
@@ -922,6 +1033,22 @@ class SQLiteReviewStore:
                     (now, campaign_id),
                 )
                 self._refresh_campaign_status(conn, campaign_id, now=now)
+        return int(cursor.rowcount)
+
+    def release_review_campaign_items(self, item_ids: list[str]) -> int:
+        if not item_ids:
+            return 0
+        now = utc_now()
+        with self._write_lock:
+            with self._connect() as conn:
+                cursor = conn.executemany(
+                    """
+                    UPDATE review_campaign_items
+                    SET state = 'selected', updated_at = ?
+                    WHERE id = ? AND state = 'processing'
+                    """,
+                    [(now, item_id) for item_id in item_ids],
+                )
         return int(cursor.rowcount)
 
     def complete_review_campaign_item(
@@ -1108,11 +1235,14 @@ class SQLiteReviewStore:
                     )
                 LEFT JOIN review_campaign_items
                     ON review_campaign_items.review_task_id = review_tasks.id
+                LEFT JOIN review_campaigns
+                    ON review_campaigns.id = review_campaign_items.campaign_id
                 WHERE review_tasks.status IN (
                     'approved',
                     'corrected',
                     'rejected'
                 )
+                  AND COALESCE(review_campaigns.status, '') != 'invalidated'
                   AND NOT EXISTS (
                     SELECT 1
                     FROM feedback_export_items
@@ -1532,6 +1662,7 @@ class SQLiteReviewStore:
                 "approved_review_task_count": status_counts.get("approved", 0),
                 "corrected_review_task_count": corrected_count,
                 "rejected_review_task_count": status_counts.get("rejected", 0),
+                "cancelled_review_task_count": status_counts.get("cancelled", 0),
                 "auto_accept_count": auto_accept_count,
                 "needs_human_review_count": needs_human_review_count,
                 "auto_accept_rate": round(auto_accept_count / decided_count, 3) if decided_count else 0.0,
@@ -1568,6 +1699,7 @@ class SQLiteReviewStore:
                 "approved_review_task_count": 0,
                 "corrected_review_task_count": 0,
                 "rejected_review_task_count": 0,
+                "cancelled_review_task_count": 0,
                 "auto_accept_count": 0,
                 "needs_human_review_count": 0,
                 "auto_accept_rate": 0.0,
@@ -1803,6 +1935,8 @@ class SQLiteReviewStore:
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "completed_at": row["completed_at"],
+            "invalidated_at": row["invalidated_at"],
+            "invalidation_reason": row["invalidation_reason"],
         }
 
     @staticmethod
@@ -1833,6 +1967,14 @@ class SQLiteReviewStore:
         *,
         now: str,
     ) -> None:
+        campaign = conn.execute(
+            "SELECT status FROM review_campaigns WHERE id = ?",
+            (campaign_id,),
+        ).fetchone()
+        if campaign is None:
+            raise KeyError(f"review campaign not found: {campaign_id}")
+        if campaign["status"] == "invalidated":
+            return
         state_counts = {
             row["state"]: int(row["count"])
             for row in conn.execute(

@@ -14,7 +14,7 @@ Current state:
 - Uncertainty-aware classifier is implemented.
 - Semantic consistency scorer is implemented.
 - Optional LangGraph review flow exists.
-- Dashboard, diagnostics, deterministic evaluation artifacts, CI, and live smoke are in place.
+- Dashboard, diagnostics, deterministic evaluation artifacts, CI, and Colab runtime tooling are in place.
 - Real Shopify product data is ingested into deterministic processed train/calibration/test splits.
 - SQLite persistence is implemented for listings, predictions, and review tasks.
 - `CatalogQualityGraph` coordinates explicit classifier, extraction, semantic critic, policy, human-review, and decision agents.
@@ -43,7 +43,8 @@ The multi-agent version should introduce explicit agents with clear responsibili
 - Produces category set, confidence, set size, abstention flag, and classifier diagnostics.
 
 ### Attribute Extraction Agent
-- Uses the existing GitHub Models/fallback extraction path.
+- Uses a provider boundary with deterministic mock mode for CI and pinned
+  `Qwen/Qwen3.5-9B` in 4-bit NF4 for Colab GPU execution.
 - Produces validated structured attributes.
 
 ### Semantic Critic Agent
@@ -122,7 +123,7 @@ Raw dataset policy:
 After ingestion:
 ```bash
 .venv/bin/python scripts/train_classifier.py --force
-USE_MOCK_LLM=true .venv/bin/python scripts/evaluate.py
+ATTRIBUTE_PROVIDER=mock .venv/bin/python scripts/evaluate.py --mock
 ```
 
 Real-data acceptance criteria:

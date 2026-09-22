@@ -13,5 +13,7 @@ os.environ.setdefault(
     "CLASSIFIER_ARTIFACT_PATH",
     f"/tmp/uamas-pytest-classifier-{os.getpid()}.joblib",
 )
-os.environ.setdefault("USE_MOCK_LLM", "true")
-os.environ.setdefault("ENABLE_SEMANTIC_SCORER", "false")
+os.environ["USE_MOCK_LLM"] = "true"
+os.environ["ATTRIBUTE_PROVIDER"] = "mock"
+os.environ["ENABLE_SEMANTIC_SCORER"] = "false"
+os.environ["SEMANTIC_PROVIDER"] = "disabled"

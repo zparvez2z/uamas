@@ -12,14 +12,14 @@ The engineering goals are:
 - preserve workflow and per-agent execution history,
 - use human review as future training evidence,
 - expose runtime diagnostics for operational verification,
-- and remain usable when optional model services degrade.
+- and fail evidence-producing campaigns closed when model runtimes degrade.
 
 ## 2) Core Concepts
 ### Uncertainty-aware behavior
 The pipeline does not force every input into a single hard answer. Instead, it can:
 - return a calibrated label set,
 - abstain when confidence is low,
-- or fall back to deterministic behavior when the LLM path is unavailable.
+- use deterministic mock behavior only when that mode is explicitly selected.
 
 ### Conformal Language Modeling idea
 The demo uses conformal-style set construction as the main reliability concept. For an input $x$, the system returns a set $C(x)$ of candidate labels such that the selected label is covered with controlled risk under calibration assumptions.
@@ -29,7 +29,7 @@ The practical effect is a tradeoff:
 - and larger sets can increase latency or reduce usability.
 
 ### Structured extraction
-The attribute extraction path uses GitHub Models via Azure AI Inference and validates the output with Pydantic. If the model output is malformed or the call fails, the pipeline falls back to the deterministic extractor in `GitHubModelsClient`.
+Attribute extraction is behind a provider boundary. CI uses an explicit deterministic provider. Real campaigns use pinned `Qwen/Qwen3.5-9B` weights through Hugging Face Transformers, 4-bit NF4 quantization, FP16 compute, and non-thinking deterministic generation. Pydantic validates every result. A local-provider failure returns `FAILED` with unknown attributes; it never fabricates mock evidence.
 
 ## 3) Architecture
 ![UAMAS system architecture](docs/architecture.svg)
@@ -45,16 +45,16 @@ How to read the diagram:
 **Implemented now**
 - Real public catalog data ingestion and deterministic train/calibration/test splits.
 - A pinned classifier runtime profile and strict artifact compatibility handling.
-- Calibrated prediction sets, abstention, semantic consistency scoring, and graceful provider fallback.
+- Calibrated prediction sets, abstention, local semantic consistency scoring, and explicit provider failure states.
 - Explicit classifier, extraction, semantic critic, policy, human review, and decision agents.
 - SQLite-backed listings, predictions, review tasks, workflow runs, and per-agent execution history.
 - Production fail-closed authentication, signed admin sessions, bearer API access, CSRF protection, security headers, and bounded request bodies.
 - Audited workflow-history retention with dry-run preview, pre-change backup, bounded pruning, and optional vacuum.
-- Browser and JSON review interfaces, operational metrics, diagnostics, dashboard, CI, and live smoke verification.
+- Browser and JSON review interfaces, operational metrics, diagnostics, dashboard, CI, and Colab hardware preflight scripts.
 - A disjoint, balanced feedback pool with deterministic review campaigns, bounded execution, hidden reference labels, aggregate agreement reporting, and validated feedback export.
 
 **Next planned**
-- Resolve the first balanced review campaign.
+- Pass the Qwen extraction benchmark and run a fresh strict review campaign.
 - Train feedback-augmented artifacts as candidates without replacing the active artifact.
 - Compare candidates on untouched test evidence and promote only through explicit guardrails.
 
@@ -68,7 +68,8 @@ How to read the diagram:
 - `reliable_genai/agents/` contains the independently testable catalog agent implementations.
 - `reliable_genai/review_graph.py` optionally orchestrates second-pass review through LangGraph when enabled.
 - `reliable_genai/pipeline.py` exposes reusable classification, extraction, semantic-scoring, and response-assembly stages while preserving `predict()`.
-- `reliable_genai/llm_wrappers.py` handles GitHub Models access, mock mode, and fallback extraction.
+- `reliable_genai/providers/` owns mock/local-HF extraction and local sentence-transformer backends.
+- `reliable_genai/llm_wrappers.py` retains a narrow compatibility import for older callers.
 - `reliable_genai/persistence.py` owns SQLite schema and repository operations for listings, predictions, review tasks, workflow runs, and agent runs.
 - `reliable_genai/workflow_history.py` records bounded per-agent summaries, durations, degradation, and failures.
 - `reliable_genai/security.py` owns production configuration validation, admin sessions, API bearer authentication, CSRF checks, and response hardening.
@@ -83,10 +84,10 @@ How to read the diagram:
 3. The set builder keeps labels until cumulative probability crosses the calibrated cumulative-mass threshold computed on the calibration split.
 4. `SemanticConsistencyScorer` computes an embedding-based consistency score and status (`ok`, `degraded`, or `disabled`).
 5. Optional review mode (`ENABLE_LANGGRAPH_REVIEW=true`) can run a second prediction pass for abstained/low-confidence/low-semantic-consistency outputs and keeps the stronger result.
-6. `GitHubModelsClient.extract_attributes()` calls the model or falls back to a deterministic extractor.
+6. The configured attribute provider returns a validated `MOCK`, `LOCAL_HF`, or `FAILED` outcome with model provenance and latency.
 7. The response is validated through the Pydantic models in `reliable_genai/models.py`.
 8. The FastAPI route serializes the full response for the template.
-9. `GET /diagnostics` reports runtime mode, endpoint, token presence, review/semantic health fields, and SQLite persistence health.
+9. `GET /diagnostics` reports provider/model provenance, review/semantic health fields, and SQLite persistence health.
 
 ### Catalog review API flow
 1. A caller submits title/description to `POST /api/listings/analyze`.
@@ -161,11 +162,14 @@ How to read the diagram:
 - Keeps report metric calculations shared and directly testable.
 
 ### `reliable_genai/llm_wrappers.py`
-- Connects to GitHub Models.
-- Uses Azure AI Inference.
-- Supports mock mode and fallback behavior.
-- Tracks the last runtime path in `last_runtime`.
-- Parses JSON and validates structured output.
+- Preserves the historical client import as an alias to the provider facade.
+
+### `reliable_genai/providers/`
+- Selects explicit deterministic mock or local Hugging Face extraction.
+- Lazily loads the pinned Qwen revision only when real inference begins.
+- Uses text-only `AutoModelForCausalLM`, NF4 quantization, and bounded generation.
+- Runs the pinned sentence-transformer semantic backend on CPU and caches prototypes.
+- Records provider, model revision, quantization, dtype, device, latency, and errors.
 
 ### `reliable_genai/models.py`
 - Defines request and response schemas.
@@ -237,6 +241,12 @@ The response includes:
 - `policy_action`
 - `llm_runtime`
 - `llm_model`
+- `llm_provider`
+- `llm_model_revision`
+- `llm_quantization`
+- `llm_compute_dtype`
+- `llm_device`
+- `llm_latency_ms`
 - `classifier_runtime`
 - `classifier_reason`
 - `classifier_artifact_path`
@@ -249,6 +259,11 @@ The response includes:
 - `semantic_consistency_score`
 - `semantic_consistency_status`
 - `semantic_consistency_reason`
+- `semantic_provider`
+- `semantic_model`
+- `semantic_model_revision`
+- `semantic_device`
+- `semantic_latency_ms`
 - `coverage_threshold`
 
 These fields make the behavior explainable during a review or demo and also support regression checks when the pipeline changes.
@@ -257,8 +272,7 @@ These fields make the behavior explainable during a review or demo and also supp
 `GET /diagnostics` returns:
 - runtime mode,
 - selected model,
-- endpoint,
-- whether a token is present,
+- provider, pinned model revision, quantization, dtype, and device,
 - active security environment and whether authentication is enabled,
 - the last runtime path used by the pipeline,
 - classifier runtime source (`ARTIFACT`, `TRAINED`, or `FALLBACK`),
@@ -274,29 +288,31 @@ These fields make the behavior explainable during a review or demo and also supp
 
 The endpoint is protected whenever authentication is enabled. It does not expose token values or token prefixes.
 
-Healthy live mode indicators:
-- `token_present: true`,
-- endpoint and selected model are populated,
-- `last_runtime` reports `LIVE` after a prediction,
+Healthy local-HF indicators:
+- `runtime_mode: LOCAL_HF`,
+- provider and pinned model revision are populated,
+- `last_runtime` reports `LOCAL_HF` after a prediction,
 - classifier runtime is `ARTIFACT` or `TRAINED` with `classifier_ready: true`.
 
-Fallback interpretation:
-- `mode` can still be `LIVE` while `last_runtime` shows a fallback path for the latest call,
-- this usually indicates transient model/response issues rather than API misconfiguration,
-- record fallback frequency and reason in demo run notes.
+Failure interpretation:
+- `last_runtime: FAILED` means local model loading, generation, parsing, or validation failed,
+- normal API requests retain a valid schema with unknown attributes,
+- strict campaigns abort and preserve the failure instead of accepting those predictions as evidence.
 
 ## 8) Environment Variables
-Required:
-- `GITHUB_MODELS_ENDPOINT`
-- `GITHUB_TOKEN`
-- `GITHUB_MODELS_MODEL`
-
 Behavior flags:
 - `RUNTIME_PROFILE_PATH` (default `config/runtime_profile.json`)
-- `USE_MOCK_LLM`
+- `ATTRIBUTE_PROVIDER` (`mock` default; `huggingface_local` for Colab)
+- `ATTRIBUTE_MODEL` (default `Qwen/Qwen3.5-9B`)
+- `ATTRIBUTE_MODEL_REVISION` (pinned commit in `.env.example`)
+- `ATTRIBUTE_QUANTIZATION` (`nf4`)
+- `ATTRIBUTE_COMPUTE_DTYPE` (`float16`)
+- `ATTRIBUTE_DEVICE` (`auto`)
+- `ATTRIBUTE_MAX_INPUT_TOKENS` (default `4096`)
+- `ATTRIBUTE_MAX_NEW_TOKENS` (default `192`)
+- `USE_MOCK_LLM` (deprecated compatibility switch used only when `ATTRIBUTE_PROVIDER` is unset)
 - `ALPHA` (overrides profile `alpha`)
 - `MAX_SET_SIZE`
-- `LLM_MAX_RETRIES`
 - `ENABLE_ABSTAIN`
 - `CLASSIFIER_MODEL_TYPE` (overrides profile `classifier_model_type`)
 - `STRICT_ARTIFACT_METADATA` (overrides profile `strict_artifact_metadata`)
@@ -307,8 +323,11 @@ Behavior flags:
 - `REVIEW_CACHE_TTL_SECONDS` (default `300`, TTL for review graph second-pass node cache)
 - `REVIEW_GATE_STRATEGY` (`legacy` default, optional `latency_v1`)
 - `REVIEW_VERY_LOW_CONFIDENCE_FLOOR` (default `0.35`, used by `latency_v1`)
-- `ENABLE_SEMANTIC_SCORER` (`true` default)
-- `GITHUB_MODELS_EMBEDDING_MODEL` (default `openai/text-embedding-3-small`)
+- `ENABLE_SEMANTIC_SCORER` (`false` default; enabled explicitly in the Colab profile)
+- `SEMANTIC_PROVIDER` (`disabled` or `sentence_transformers`)
+- `SEMANTIC_MODEL` (default `sentence-transformers/all-MiniLM-L6-v2`)
+- `SEMANTIC_MODEL_REVISION` (pinned commit in `.env.example`)
+- `SEMANTIC_DEVICE` (`cpu` for the Colab profile)
 - `SEMANTIC_CONSISTENCY_THRESHOLD` (default `0.4`, semantic review trigger threshold)
 - `SEMANTIC_MAX_RETRIES` (default `1`)
 - `UAMAS_DB_PATH` (default `data/uamas.db`, SQLite persistence path)
@@ -352,7 +371,7 @@ For implementation work, the most useful checks are:
 - `scripts/train_classifier.py --force` to rebuild the classifier artifact,
 - `scripts/evaluate.py` with mock LLM mode for deterministic labeled coverage and set-size metrics,
 - `scripts/evaluate.py --include-runtime --output /tmp/uamas-results.md` when timing measurements are needed,
-- a live `POST /predict` request with `USE_MOCK_LLM=false`,
+- the Colab local-model preflight and fixed extraction benchmark,
 - and a `GET /diagnostics` request before the demo starts.
 
 ## 10) Current Repository Structure
@@ -433,11 +452,11 @@ Next feedback-loop work:
 
 Review campaign workflow:
 ```bash
-USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+ATTRIBUTE_PROVIDER=mock .venv/bin/python scripts/review_campaign.py \
   plan --name baseline-01 --per-category 20 --seed 42
-USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+ATTRIBUTE_PROVIDER=mock .venv/bin/python scripts/review_campaign.py \
   create --name baseline-01 --per-category 20 --seed 42
-USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+ATTRIBUTE_PROVIDER=mock .venv/bin/python scripts/review_campaign.py \
   run CAMPAIGN_ID --limit 20
 .venv/bin/python scripts/review_campaign.py status CAMPAIGN_ID
 .venv/bin/python scripts/review_campaign.py report CAMPAIGN_ID
@@ -473,19 +492,54 @@ The first command only previews eligible data. Applied cleanup removes detailed 
 - Move execution to workers only when request latency or concurrency requires it.
 - Evaluate richer embedding backends and classifier families through versioned artifact comparisons.
 
-## 13) Live Runtime Validation Checklist
-1. Export or set live environment variables (`GITHUB_MODELS_ENDPOINT`, `GITHUB_TOKEN`, `GITHUB_MODELS_MODEL`).
-2. Start app in live mode:
-   `USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload`
-3. Check diagnostics:
-   `curl -s http://127.0.0.1:8000/diagnostics | python -m json.tool`
-4. Run at least one clear and one ambiguous prediction.
-5. Confirm response `reliability.llm_runtime` and diagnostics `last_runtime` match expected live behavior.
-6. If fallback appears, capture `llm_last_error` in the validation evidence.
+## 13) Colab Runtime Validation Checklist
+1. Run `./scripts/install_colab_cli.sh`, activate `.colab-cli-venv`, and complete interactive authorization with `colab sessions`.
+2. Run `colab run --gpu T4 --keep -s uamas-qwen --timeout 7200 scripts/colab_preflight.py`.
+3. Confirm extraction reports `LOCAL_HF`, semantic status reports `ok`, and both pinned revisions are present.
+4. Run `colab exec -s uamas-qwen --timeout 7200 -f scripts/colab_model_benchmark.py`.
+5. Download `/content/uamas-output/attribute-benchmark.json` and inspect field accuracy, hallucination rate, latency, and peak GPU memory.
+6. Require 30 `LOCAL_HF` calls, complete schema success, and zero failed/fallback calls before campaign creation.
+7. Use a separate `/content/uamas-qwen-campaign.db`, batches of at most 20, and strict runtime flags.
+8. Download a SQLite backup from `/content/uamas-output/` after every batch and stop the session when finished.
 
-Host-side helper:
-- `./host_side_verfication_pass.sh`
-- Expected pass signal: each `PREDICT_*` line reports `llm_runtime: LIVE` and `diag_llm_last_error: None`.
+Colab is batch compute, not a production serving host. Free accelerator availability and session lifetime are not guaranteed.
+
+### Strict campaign sequence
+After the benchmark passes, create a fresh database and campaign in the retained session:
+
+```bash
+colab exec -s uamas-qwen --timeout 7200 \
+  --env UAMAS_CAMPAIGN_ACTION=create \
+  -f scripts/colab_campaign_worker.py
+```
+
+Record the returned campaign ID. Start with a five-item smoke batch, then use batches of 20:
+
+```bash
+colab exec -s uamas-qwen --timeout 7200 \
+  --env UAMAS_CAMPAIGN_ACTION=run \
+  --env UAMAS_CAMPAIGN_ID=CAMPAIGN_ID \
+  --env UAMAS_CAMPAIGN_BATCH_SIZE=5 \
+  -f scripts/colab_campaign_worker.py
+
+colab exec -s uamas-qwen --timeout 7200 \
+  --env UAMAS_CAMPAIGN_ACTION=run \
+  --env UAMAS_CAMPAIGN_ID=CAMPAIGN_ID \
+  --env UAMAS_CAMPAIGN_BATCH_SIZE=20 \
+  -f scripts/colab_campaign_worker.py
+```
+
+Each operation creates a consistent backup under `/content/uamas-output/`. List and download the newest backup before continuing or stopping the runtime:
+
+```bash
+colab ls -s uamas-qwen /content/uamas-output
+colab download -s uamas-qwen \
+  /content/uamas-output/uamas-qwen-campaign-TIMESTAMP.db \
+  data/uamas-qwen-campaign.db
+colab stop -s uamas-qwen
+```
+
+The worker enforces `LOCAL_HF`, aborts on semantic degradation, and stops after one consecutive item failure. Reference labels remain hidden from reviewer-facing records.
 
 ## 14) GitHub Actions Validation
 The repository separates merge validation from longer evaluation evidence:
@@ -525,24 +579,10 @@ Acceptance is intentionally not repeated on every pull request. It runs against 
 
 Dependabot groups routine Python updates and GitHub Actions updates by ecosystem. Framework, model, orchestration, provider, server, and test-runner dependencies are excluded from the routine Python group so they remain isolated for explicit review. Package-name exclusions are used instead of semantic update types because lower-bound-only requirements do not give Dependabot a reliable installed version for classifying an update as major, minor, or patch.
 
-## 15) GitHub Actions Live Smoke Workflow
-Workflow file:
-- `.github/workflows/live-smoke.yml`
+## 15) Hardware Acceptance Boundary
+GitHub Actions validates provider selection, schema handling, failure behavior, campaign invalidation, and strict preflight logic using fakes. It never downloads Qwen or sentence-transformer weights.
 
-Trigger:
-- Manual `workflow_dispatch` from Actions tab.
-
-Required repository secret:
-- `MODELS_API_KEY`
-
-What it verifies:
-- live token is present in workflow runtime,
-- classifier artifact can be rebuilt,
-- three sample predictions complete with `llm_runtime=LIVE`,
-- diagnostics remain `last_runtime=LIVE` and `llm_last_error=None`.
-
-Local equivalent:
-- `USE_MOCK_LLM=false .venv/bin/python scripts/live_smoke.py`
+Actual CUDA, NF4 loading, latency, memory, and output-quality acceptance run manually on Colab. The evidence artifact is generated by `scripts/benchmark_attribute_extraction.py`; only reviewed evidence should be committed.
 
 ## 16) Merge Safety Checklist
 - Keep each PR single-purpose (tests, docs, workflow, evaluation) instead of mixing concerns.

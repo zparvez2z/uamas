@@ -48,6 +48,12 @@ class ReliabilityMeta(BaseModel):
     policy_action: str
     llm_runtime: str
     llm_model: str
+    llm_provider: str = "unknown"
+    llm_model_revision: Optional[str] = None
+    llm_quantization: Optional[str] = None
+    llm_compute_dtype: Optional[str] = None
+    llm_device: Optional[str] = None
+    llm_latency_ms: Optional[float] = None
     classifier_runtime: str
     classifier_reason: Optional[str] = None
     classifier_artifact_path: Optional[str] = None
@@ -61,6 +67,11 @@ class ReliabilityMeta(BaseModel):
     semantic_consistency_score: Optional[float] = None
     semantic_consistency_status: str = "disabled"
     semantic_consistency_reason: Optional[str] = None
+    semantic_provider: Optional[str] = None
+    semantic_model: Optional[str] = None
+    semantic_model_revision: Optional[str] = None
+    semantic_device: Optional[str] = None
+    semantic_latency_ms: Optional[float] = None
     review_graph_used: bool = False
     review_trigger_reason: Optional[str] = None
     review_outcome: Optional[str] = None
@@ -101,7 +112,7 @@ class ReviewTask(BaseModel):
     id: str
     listing_id: str
     prediction_id: Optional[str] = None
-    status: Literal["pending", "approved", "corrected", "rejected"] = "pending"
+    status: Literal["pending", "approved", "corrected", "rejected", "cancelled"] = "pending"
     reason: str
     risk_level: Literal["low", "medium", "high"] = "high"
     corrected_category: Optional[str] = None
@@ -176,6 +187,7 @@ class OperationalMetrics(BaseModel):
     approved_review_task_count: int
     corrected_review_task_count: int
     rejected_review_task_count: int
+    cancelled_review_task_count: int = 0
     review_status_counts: Dict[str, int] = Field(default_factory=dict)
     review_reason_counts: Dict[str, int] = Field(default_factory=dict)
     auto_accept_count: int

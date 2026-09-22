@@ -8,7 +8,9 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  USE_MOCK_LLM: "true"
+  ATTRIBUTE_PROVIDER: "mock"
+  ENABLE_SEMANTIC_SCORER: "false"
+  SEMANTIC_PROVIDER: "disabled"
 
 permissions:
   contents: read

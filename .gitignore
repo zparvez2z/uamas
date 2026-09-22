@@ -1,5 +1,6 @@
 .env
 .venv/
+.colab-cli-venv/
 __pycache__/
 *.pyc
 .DS_Store

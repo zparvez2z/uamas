@@ -59,14 +59,17 @@ class AttributeExtractionAgent:
 
     @staticmethod
     def trace(result: AttributeExtractionStageResult) -> AgentTrace:
-        degraded = result.runtime == "FALLBACK_MOCK"
+        degraded = result.runtime not in {"MOCK", "LOCAL_HF"}
         return AgentTrace(
             agent="attribute_extraction_agent",
             status="degraded" if degraded else "ok",
             output={
                 **result.attributes.model_dump(),
                 "runtime": result.runtime,
+                "provider": result.provider,
                 "model": result.model,
+                "revision": result.revision,
+                "latency_ms": result.latency_ms,
             },
             reason=result.error,
         )
@@ -94,6 +97,9 @@ class SemanticCriticAgent:
             output={
                 "score": result.score,
                 "threshold": self.threshold,
+                "provider": result.provider,
+                "model": result.model,
+                "latency_ms": result.latency_ms,
             },
             reason=result.reason,
         )

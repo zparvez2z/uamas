@@ -49,10 +49,10 @@ Implemented:
 - production fail-closed authentication and CSRF-protected review actions,
 - audited retention cleanup with dry-run preview and pre-change backups,
 - operational diagnostics, metrics, dashboard, and evaluation artifacts,
-- mock mode, live GitHub Models mode, automated CI, and a manual live smoke workflow.
+- deterministic mock mode for CI and a pinned local Qwen runtime for Colab GPU campaigns.
 
 Next:
-- run and resolve the first balanced review campaign,
+- validate Qwen on the fixed extraction benchmark, then run and resolve the first real campaign,
 - train a candidate classifier from eligible reviewer evidence,
 - and compare it against the active artifact before explicit promotion.
 
@@ -72,7 +72,7 @@ cp .env.example .env
 Start in deterministic local mode:
 
 ```bash
-USE_MOCK_LLM=true ENABLE_SEMANTIC_SCORER=false \
+ATTRIBUTE_PROVIDER=mock ENABLE_SEMANTIC_SCORER=false \
   .venv/bin/python -m uvicorn app.main:app --reload
 ```
 
@@ -102,15 +102,36 @@ Inspect that workflow afterward:
 curl http://127.0.0.1:8000/api/workflow-runs/WORKFLOW_RUN_ID
 ```
 
-## Live GitHub Models Mode
+## Local Qwen on Google Colab
 
-Set `GITHUB_TOKEN`, `GITHUB_MODELS_ENDPOINT`, and `GITHUB_MODELS_MODEL` in `.env`, then run:
+Real attribute extraction uses pinned `Qwen/Qwen3.5-9B` weights in 4-bit NF4. The semantic critic uses a pinned sentence-transformer on CPU, leaving the Colab GPU for Qwen. Mock mode remains the default for laptops and CI.
+
+Install the [Google Colab CLI](https://github.com/googlecolab/google-colab-cli) in its isolated Python 3.12 environment, then complete the interactive Google authorization:
 
 ```bash
-USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload
+./scripts/install_colab_cli.sh
+source .colab-cli-venv/bin/activate
+colab sessions
 ```
 
-Check `/diagnostics` after a request to confirm whether the latest model call used `LIVE`, `MOCK`, or `FALLBACK_MOCK`.
+Start a retained T4 session with the strict runtime preflight:
+
+```bash
+colab run --gpu T4 --keep -s uamas-qwen --timeout 7200 \
+  scripts/colab_preflight.py
+```
+
+Run the fixed 30-product extraction benchmark in the same session:
+
+```bash
+colab exec -s uamas-qwen --timeout 7200 \
+  -f scripts/colab_model_benchmark.py
+colab download -s uamas-qwen \
+  /content/uamas-output/attribute-benchmark.json \
+  reports/attribute-extraction-qwen35.json
+```
+
+Do not start the 120-product review campaign until the benchmark reports 30 `LOCAL_HF` calls, complete schema success, and no failed or fallback calls. Colab runtimes are ephemeral; keep campaign work in bounded batches and download a SQLite snapshot after each batch.
 
 ## Production Security
 
@@ -177,17 +198,17 @@ No private company data is included.
 Preview a deterministic, balanced campaign without model or database writes:
 
 ```bash
-USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+ATTRIBUTE_PROVIDER=mock .venv/bin/python scripts/review_campaign.py \
   plan --name baseline-01 --per-category 20 --seed 42
 ```
 
 Create it, then process bounded batches:
 
 ```bash
-USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+ATTRIBUTE_PROVIDER=mock .venv/bin/python scripts/review_campaign.py \
   create --name baseline-01 --per-category 20 --seed 42
 
-USE_MOCK_LLM=true .venv/bin/python scripts/review_campaign.py \
+ATTRIBUTE_PROVIDER=mock .venv/bin/python scripts/review_campaign.py \
   run CAMPAIGN_ID --limit 20
 
 .venv/bin/python scripts/review_campaign.py status CAMPAIGN_ID
@@ -201,7 +222,7 @@ Review queued items at `/review?campaign_id=CAMPAIGN_ID`. Dataset reference labe
 ```bash
 .venv/bin/python scripts/train_classifier.py --force
 .venv/bin/python -m pytest
-USE_MOCK_LLM=true .venv/bin/python scripts/evaluate.py
+ATTRIBUTE_PROVIDER=mock .venv/bin/python scripts/evaluate.py --mock
 ```
 
 Evaluation evidence is available in:
@@ -216,5 +237,5 @@ Evaluation evidence is available in:
 - [DEMO.md](DEMO.md): demonstration runbook
 - `app/`: FastAPI routes, templates, and operational interfaces
 - `reliable_genai/`: agents, graphs, reliability pipeline, models, and persistence
-- `scripts/`: ingestion, training, evaluation, and live-smoke commands
+- `scripts/`: ingestion, training, evaluation, campaign, and Colab runtime commands
 - `tests/`: unit and integration coverage

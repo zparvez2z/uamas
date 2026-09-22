@@ -10,13 +10,15 @@ updates:
         patterns:
           - "*"
         exclude-patterns:
-          - "azure-ai-inference"
-          - "azure-core"
+          - "accelerate"
+          - "bitsandbytes"
           - "fastapi"
           - "langgraph"
           - "pydantic"
           - "pytest"
           - "scikit-learn"
+          - "sentence-transformers"
+          - "transformers"
           - "uvicorn"
 
   - package-ecosystem: github-actions

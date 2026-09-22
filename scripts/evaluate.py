@@ -63,6 +63,18 @@ def select_evaluation_sample(rows: list[dict[str, str]], sample_size: int | None
 DETERMINISTIC_TIMESTAMP = "deterministic"
 
 
+def attribute_provider_diagnostics(llm: object) -> dict[str, object]:
+    diagnostics = getattr(llm, "diagnostics", None)
+    if callable(diagnostics):
+        return diagnostics()
+    use_mock = bool(getattr(llm, "use_mock", True))
+    return {
+        "provider": "mock" if use_mock else "legacy",
+        "runtime_mode": "MOCK" if use_mock else "LIVE",
+        "revision": None,
+    }
+
+
 def display_path(path: object, deterministic: bool) -> object:
     if not deterministic or not path:
         return path
@@ -125,7 +137,7 @@ def run_review_trigger_acceptance_check(
     coverage_delta = round(tuned["metrics"]["empirical_coverage"] - baseline["metrics"]["empirical_coverage"], 3)
     return {
         "date": datetime.now().date().isoformat(),
-        "runtime_mode": f"USE_MOCK_LLM={'true' if use_mock else 'false'}, ENABLE_LANGGRAPH_REVIEW=true",
+        "runtime_mode": f"ATTRIBUTE_PROVIDER={'mock' if use_mock else 'huggingface_local'}, ENABLE_LANGGRAPH_REVIEW=true",
         "sample_size": sample_size,
         "baseline_config": {
             "review_gate_strategy": "legacy",
@@ -160,6 +172,7 @@ def run_evaluation(
     if max_set_size is not None:
         os.environ["MAX_SET_SIZE"] = str(max_set_size)
     os.environ["USE_MOCK_LLM"] = "true" if use_mock else "false"
+    os.environ["ATTRIBUTE_PROVIDER"] = "mock" if use_mock else "huggingface_local"
 
     print("[INFO] Initializing pipeline...")
     pipeline = ReliabilityPipeline()
@@ -172,7 +185,8 @@ def run_evaluation(
     print(f"[INFO] Classifier runtime: {classifier_diagnostics['runtime']}")
     if pipeline.classifier.reason:
         print(f"[INFO] Classifier fallback reason: {pipeline.classifier.reason}")
-    print(f"[INFO] LLM mode: {'MOCK' if pipeline.llm.use_mock else 'LIVE'}")
+    provider_diagnostics = attribute_provider_diagnostics(pipeline.llm)
+    print(f"[INFO] Attribute runtime: {provider_diagnostics['runtime_mode']}")
     print(
         "[INFO] Review graph: "
         f"enabled={review_diagnostics['enabled']} "
@@ -237,14 +251,18 @@ def run_evaluation(
     ).model_dump()
 
     runtime_breakdown = {
+        "local_hf_count": 0,
         "live_count": 0,
         "mock_count": 0,
         "fallback_mock_count": 0,
+        "failed_count": 0,
     }
     expected_live_mode = not pipeline.llm.use_mock
     for result in results:
         runtime = result["reliability"].get("llm_runtime")
-        if runtime == "LIVE":
+        if runtime == "LOCAL_HF":
+            runtime_breakdown["local_hf_count"] += 1
+        elif runtime == "LIVE":
             runtime_breakdown["live_count"] += 1
         elif runtime == "FALLBACK_MOCK":
             runtime_breakdown["fallback_mock_count"] += 1
@@ -253,8 +271,10 @@ def run_evaluation(
                 runtime_breakdown["fallback_mock_count"] += 1
             else:
                 runtime_breakdown["mock_count"] += 1
+        elif runtime == "FAILED":
+            runtime_breakdown["failed_count"] += 1
         else:
-            runtime_breakdown["mock_count"] += 1
+            runtime_breakdown["failed_count"] += 1
     runtime_breakdown["fallback_rate"] = (
         round(runtime_breakdown["fallback_mock_count"] / len(results), 3) if results else 0.0
     )
@@ -340,7 +360,9 @@ def run_evaluation(
         "semantic_low_consistency_rate": round(semantic_low_count / len(results), 3) if results else 0.0,
         "semantic_low_consistency_count": semantic_low_count,
         "semantic_degraded_count": semantic_degraded_count,
-        "llm_runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
+        "llm_runtime_mode": str(provider_diagnostics["runtime_mode"]),
+        "llm_provider": provider_diagnostics["provider"],
+        "llm_model_revision": provider_diagnostics.get("revision"),
         "results": results,
         "metrics": metrics,
         "runtime_breakdown": runtime_breakdown,
@@ -455,14 +477,16 @@ def save_results(
 
         runtime_breakdown = aggregated.get("runtime_breakdown") or {}
         should_render_runtime_breakdown = (
-            aggregated.get("llm_runtime_mode") == "LIVE"
+            aggregated.get("llm_runtime_mode") in {"LIVE", "LOCAL_HF"}
             or runtime_breakdown.get("fallback_mock_count", 0) > 0
         )
         if should_render_runtime_breakdown:
             handle.write("## LLM Runtime Breakdown\n\n")
-            handle.write(f"- LIVE calls: {runtime_breakdown.get('live_count', 0)}\n")
+            handle.write(f"- LOCAL_HF calls: {runtime_breakdown.get('local_hf_count', 0)}\n")
+            handle.write(f"- legacy LIVE calls: {runtime_breakdown.get('live_count', 0)}\n")
             handle.write(f"- MOCK calls: {runtime_breakdown.get('mock_count', 0)}\n")
             handle.write(f"- FALLBACK_MOCK calls: {runtime_breakdown.get('fallback_mock_count', 0)}\n")
+            handle.write(f"- FAILED calls: {runtime_breakdown.get('failed_count', 0)}\n")
             handle.write(f"- Fallback rate: {runtime_breakdown.get('fallback_rate', 0.0):.3f}\n\n")
 
         metadata = aggregated.get("classifier_artifact_metadata") or {}
@@ -543,7 +567,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--include-runtime", action="store_true", help="Include wall-clock timing in saved results")
     mode_group = parser.add_mutually_exclusive_group()
-    mode_group.add_argument("--live", action="store_true", help="Run evaluation with USE_MOCK_LLM=false")
+    mode_group.add_argument(
+        "--local-hf",
+        "--live",
+        dest="live",
+        action="store_true",
+        help="Run evaluation with the local Hugging Face provider (--live is deprecated)",
+    )
     mode_group.add_argument("--mock", action="store_true", help="Run evaluation with USE_MOCK_LLM=true (default)")
     parser.add_argument(
         "--with-review-acceptance-check",

@@ -28,12 +28,13 @@ Expected signal:
 - Evaluation completes without errors.
 - Output file exists: `/tmp/uamas-pre-demo-results.md`.
 
-## 3) Mock Demo Path (Safe Fallback)
+## 3) Local Application Demo
 Terminal 1:
 ```bash
 cd /home/pz/projects/uamas
 source .venv/bin/activate
-USE_MOCK_LLM=true .venv/bin/python -m uvicorn app.main:app --reload
+ATTRIBUTE_PROVIDER=mock ENABLE_SEMANTIC_SCORER=false \
+  .venv/bin/python -m uvicorn app.main:app --reload
 ```
 
 Open:
@@ -45,31 +46,32 @@ Expected diagnostics:
 - `runtime_mode: "MOCK"`
 - `classifier_runtime: "ARTIFACT"`
 
-## 4) Live Demo Path (Primary)
-Make sure `.env` has valid:
-- `GITHUB_TOKEN`
-- `GITHUB_MODELS_ENDPOINT`
-- `GITHUB_MODELS_MODEL`
+## 4) Real-Model Evidence Path
+Real Qwen execution is a bounded Colab batch workflow, not a laptop-hosted API mode. Start a retained T4 session and run the strict preflight:
 
-Terminal 1:
 ```bash
-cd /home/pz/projects/uamas
-source .venv/bin/activate
-USE_MOCK_LLM=false .venv/bin/python -m uvicorn app.main:app --reload
+./scripts/install_colab_cli.sh
+source .colab-cli-venv/bin/activate
+colab sessions
+colab run --gpu T4 --keep -s uamas-qwen --timeout 7200 \
+  scripts/colab_preflight.py
 ```
 
-Terminal 2 (strict host-side verification):
+Then run and retrieve the fixed benchmark:
+
 ```bash
-cd /home/pz/projects/uamas
-source .venv/bin/activate
-./host_side_verfication_pass.sh
+colab exec -s uamas-qwen --timeout 7200 \
+  -f scripts/colab_model_benchmark.py
+colab download -s uamas-qwen \
+  /content/uamas-output/attribute-benchmark.json \
+  reports/attribute-extraction-qwen35.json
 ```
 
 Expected success signal:
-- Every `PREDICT_*` block shows:
-  - `"llm_runtime": "LIVE"`
-  - `"diag_last_runtime": "LIVE"`
-  - `"diag_llm_last_error": None`
+- all 30 benchmark calls report `LOCAL_HF`,
+- schema success is complete,
+- no fallback or failed calls are present,
+- latency and peak GPU memory are recorded.
 
 ## 5) Demo Inputs to Use in UI
 ### Input A (clear case)
@@ -93,14 +95,14 @@ Expected behavior:
 2. `/dashboard` page: semantic scorer health + latest evaluation summary cards.
 3. Run Input A: show category set + attributes + reliability metadata.
 4. Run Input B: show uncertainty handling (set size/abstain behavior).
-5. Mention that live failures degrade gracefully to fallback mock with `llm_last_error`.
+5. Show the downloaded Qwen benchmark evidence and explain that strict campaigns abort on degradation.
 6. Point to `reports/results.md` and `reports/results.json` for deterministic evidence.
 
 ## 7) Fast Troubleshooting
-### If live requests return `FALLBACK_MOCK`
-- Check `GET /diagnostics` -> `llm_last_error`.
-- Verify `.env` token and endpoint.
-- Re-run `./host_side_verfication_pass.sh`.
+### If Colab preflight reports `FAILED`
+- Confirm the assigned runtime has a CUDA GPU with `colab status -s uamas-qwen`.
+- Inspect the reported model-loading or validation error.
+- Do not create or resume a real review campaign until preflight passes.
 
 ### If classifier is not `ARTIFACT`
 ```bash
@@ -112,5 +114,5 @@ env -u ALPHA -u CLASSIFIER_MODEL_TYPE -u STRICT_ARTIFACT_METADATA -u CLASSIFIER_
 
 ### If port 8000 is busy
 ```bash
-USE_MOCK_LLM=true .venv/bin/python -m uvicorn app.main:app --reload --port 8001
+ATTRIBUTE_PROVIDER=mock .venv/bin/python -m uvicorn app.main:app --reload --port 8001
 ```

@@ -221,7 +221,7 @@ def test_diagnostics_do_not_expose_token_prefix(monkeypatch) -> None:
 
     diagnostics = app_main.build_diagnostics()
 
-    assert diagnostics["token_present"] is True
+    assert diagnostics["token_present"] is False
     assert "token_prefix" not in diagnostics
     assert secret not in str(diagnostics)
 

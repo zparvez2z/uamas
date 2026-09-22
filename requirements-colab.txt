@@ -1,0 +1,5 @@
+-r requirements.txt
+transformers==5.17.0
+accelerate==1.15.0
+bitsandbytes==0.50.2
+sentence-transformers==6.1.0

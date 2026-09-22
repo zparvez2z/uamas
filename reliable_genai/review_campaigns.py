@@ -20,6 +20,10 @@ class CatalogAnalyzer(Protocol):
     def analyze(self, listing: ListingInput) -> CatalogQualityDecision: ...
 
 
+class CampaignRuntimeViolation(RuntimeError):
+    pass
+
+
 def _canonical_json(value: object) -> str:
     return json.dumps(
         value,
@@ -42,12 +46,14 @@ class ReviewCampaignService:
         feedback_pool_path: str | Path = DEFAULT_FEEDBACK_POOL_PATH,
         metadata_path: str | Path = DEFAULT_DATASET_METADATA_PATH,
         labels: Sequence[str] = tuple(ReliabilityPipeline.LABELS),
+        runtime_probe: Callable[[], dict[str, object]] | None = None,
     ) -> None:
         self.store = store
         self.analyzer = analyzer
         self.feedback_pool_path = Path(feedback_pool_path)
         self.metadata_path = Path(metadata_path)
         self.labels = tuple(labels)
+        self.runtime_probe = runtime_probe
 
     def plan(
         self,
@@ -56,6 +62,7 @@ class ReviewCampaignService:
         per_category: int,
         seed: int,
         runtime_mode: str,
+        runtime_config: dict[str, object] | None = None,
     ) -> dict[str, object]:
         if not name.strip():
             raise ValueError("campaign name must not be empty")
@@ -85,6 +92,7 @@ class ReviewCampaignService:
             "seed": seed,
             "per_category": per_category,
             "runtime_mode": runtime_mode.upper(),
+            "runtime_config": runtime_config or {},
             "labels": list(self.labels),
         }
         campaign_id = f"cmp_{_fingerprint(config)[:16]}"
@@ -131,12 +139,14 @@ class ReviewCampaignService:
         per_category: int,
         seed: int,
         runtime_mode: str,
+        runtime_config: dict[str, object] | None = None,
     ) -> dict[str, object]:
         plan = self.plan(
             name=name,
             per_category=per_category,
             seed=seed,
             runtime_mode=runtime_mode,
+            runtime_config=runtime_config,
         )
         config = plan["config"]
         assert isinstance(config, dict)
@@ -161,6 +171,9 @@ class ReviewCampaignService:
         limit: int,
         retry_failed: bool = False,
         recover_processing: bool = False,
+        require_runtime: str | None = None,
+        abort_on_degraded: bool = False,
+        max_consecutive_failures: int = 0,
         progress: Callable[[int, int, str], None] | None = None,
     ) -> dict[str, object]:
         if self.analyzer is None:
@@ -169,6 +182,19 @@ class ReviewCampaignService:
         campaign = store.get_review_campaign(campaign_id)
         if campaign is None:
             raise KeyError(f"review campaign not found: {campaign_id}")
+        if campaign["status"] == "invalidated":
+            raise ValueError(f"review campaign is invalidated: {campaign_id}")
+        preflight = None
+        if require_runtime or abort_on_degraded:
+            if self.runtime_probe is None:
+                raise RuntimeError("strict campaign execution requires a runtime probe")
+            preflight = self.runtime_probe()
+            self._assert_runtime(
+                preflight,
+                require_runtime=require_runtime,
+                abort_on_degraded=abort_on_degraded,
+                phase="preflight",
+            )
         recovered_count = 0
         if recover_processing:
             recovered_count = store.recover_processing_review_campaign_items(
@@ -181,6 +207,8 @@ class ReviewCampaignService:
         )
         succeeded = 0
         failed = 0
+        consecutive_failures = 0
+        released = 0
         for index, item in enumerate(items, start=1):
             source = item["source_row"]
             assert isinstance(source, dict)
@@ -201,6 +229,25 @@ class ReviewCampaignService:
                         description=description,
                     )
                 )
+                try:
+                    self._assert_runtime(
+                        {
+                            "llm_runtime": decision.reliability.llm_runtime,
+                            "llm_error": None,
+                            "semantic_status": decision.reliability.semantic_consistency_status,
+                            "semantic_reason": decision.reliability.semantic_consistency_reason,
+                        },
+                        require_runtime=require_runtime,
+                        abort_on_degraded=abort_on_degraded,
+                        phase="campaign item",
+                    )
+                except CampaignRuntimeViolation:
+                    if decision.review_task_id:
+                        store.cancel_review_task(
+                            decision.review_task_id,
+                            reason="campaign runtime requirement failed",
+                        )
+                    raise
                 workflow = store.get_workflow_run(
                     str(decision.workflow_run_id)
                 )
@@ -232,6 +279,7 @@ class ReviewCampaignService:
                     selection_type=selection_type,
                 )
                 succeeded += 1
+                consecutive_failures = 0
             except Exception as exc:
                 store.fail_review_campaign_item(
                     str(item["id"]),
@@ -239,15 +287,35 @@ class ReviewCampaignService:
                     error_message=str(exc),
                 )
                 failed += 1
+                consecutive_failures += 1
+                if (
+                    max_consecutive_failures > 0
+                    and consecutive_failures >= max_consecutive_failures
+                ):
+                    remaining = [
+                        str(candidate["id"])
+                        for candidate in items[index:]
+                    ]
+                    released = store.release_review_campaign_items(remaining)
+                    break
         status = store.review_campaign_status(campaign_id)
         status["processed_this_run"] = len(items)
         status["succeeded_this_run"] = succeeded
         status["failed_this_run"] = failed
         status["recovered_processing_count"] = recovered_count
+        status["released_after_abort_count"] = released
+        status["preflight"] = preflight
         return status
 
     def status(self, campaign_id: str) -> dict[str, object]:
         return self._require_store().review_campaign_status(campaign_id)
+
+    def invalidate(self, campaign_id: str, *, reason: str) -> dict[str, object]:
+        self._require_store().invalidate_review_campaign(
+            campaign_id,
+            reason=reason,
+        )
+        return self.status(campaign_id)
 
     def report(
         self,
@@ -273,10 +341,26 @@ class ReviewCampaignService:
         three_way_comparable = 0
         degraded_count = 0
         fallback_count = 0
+        failed_runtime_count = 0
+        processed_count = 0
+        runtime_counts: Counter[str] = Counter()
+        provider_counts: Counter[str] = Counter()
 
         for row in rows:
             if row.get("selection_type"):
                 selection_counts[str(row["selection_type"])] += 1
+            reliability = json.loads(row["reliability_json"] or "{}")
+            if reliability:
+                processed_count += 1
+                runtime = str(reliability.get("llm_runtime") or "unknown")
+                provider = str(reliability.get("llm_provider") or "unknown")
+                runtime_counts[runtime] += 1
+                provider_counts[provider] += 1
+                degraded_count += int(
+                    reliability.get("semantic_consistency_status") == "degraded"
+                )
+                fallback_count += int(runtime == "FALLBACK_MOCK")
+                failed_runtime_count += int(runtime == "FAILED")
             review_status = row.get("review_status")
             if review_status not in {"approved", "corrected", "rejected"}:
                 continue
@@ -288,7 +372,6 @@ class ReviewCampaignService:
             action_counts[action] += 1
             review_reason_counts[str(row.get("review_reason") or "unknown")] += 1
             categories = json.loads(row["category_set_json"] or "[]")
-            reliability = json.loads(row["reliability_json"] or "{}")
             model_category = categories[0] if categories else None
             reviewer_category = None
             if review_status == "approved" and len(categories) == 1:
@@ -312,12 +395,6 @@ class ReviewCampaignService:
                 model_reviewer_matches += int(
                     model_category == reviewer_category
                 )
-            degraded_count += int(
-                reliability.get("semantic_consistency_status") == "degraded"
-            )
-            fallback_count += int(
-                reliability.get("llm_runtime") == "FALLBACK_MOCK"
-            )
 
         resolved_count = sum(action_counts.values())
         eligible_count = sum(final_category_counts.values())
@@ -339,6 +416,9 @@ class ReviewCampaignService:
             and correction_count >= minimum_corrections
             and category_ready
             and no_processing_failures
+            and status["status"] != "invalidated"
+            and fallback_count == 0
+            and failed_runtime_count == 0
         )
 
         def rate(numerator: int, denominator: int) -> float:
@@ -350,6 +430,9 @@ class ReviewCampaignService:
             "selected_count": status["selected_count"],
             "resolved_count": resolved_count,
             "training_eligible_count": eligible_count,
+            "processed_prediction_count": processed_count,
+            "llm_runtime_counts": dict(sorted(runtime_counts.items())),
+            "llm_provider_counts": dict(sorted(provider_counts.items())),
             "action_counts": dict(sorted(action_counts.items())),
             "selection_type_counts": dict(sorted(selection_counts.items())),
             "review_reason_counts": dict(sorted(review_reason_counts.items())),
@@ -369,8 +452,9 @@ class ReviewCampaignService:
                 reviewer_reference_matches,
                 reviewer_comparable,
             ),
-            "semantic_degraded_rate": rate(degraded_count, resolved_count),
-            "llm_fallback_rate": rate(fallback_count, resolved_count),
+            "semantic_degraded_rate": rate(degraded_count, processed_count),
+            "llm_fallback_rate": rate(fallback_count, processed_count),
+            "llm_failed_rate": rate(failed_runtime_count, processed_count),
             "readiness": {
                 "ready_for_retraining": ready,
                 "minimum_resolved": minimum_resolved,
@@ -381,6 +465,28 @@ class ReviewCampaignService:
                 "processing_complete": no_processing_failures,
             },
         }
+
+    @staticmethod
+    def _assert_runtime(
+        runtime: dict[str, object],
+        *,
+        require_runtime: str | None,
+        abort_on_degraded: bool,
+        phase: str,
+    ) -> None:
+        actual = str(runtime.get("llm_runtime") or "unknown")
+        semantic_status = str(runtime.get("semantic_status") or "unknown")
+        problems: list[str] = []
+        if require_runtime and actual != require_runtime:
+            problems.append(
+                f"required llm runtime {require_runtime}, observed {actual}"
+            )
+        if abort_on_degraded and actual in {"FAILED", "FALLBACK_MOCK"}:
+            problems.append(f"attribute runtime is degraded: {actual}")
+        if abort_on_degraded and semantic_status == "degraded":
+            problems.append("semantic runtime is degraded")
+        if problems:
+            raise CampaignRuntimeViolation(f"{phase}: {'; '.join(problems)}")
 
     def _load_feedback_pool(self) -> tuple[list[dict[str, object]], str]:
         rows = json.loads(self.feedback_pool_path.read_text(encoding="utf-8"))

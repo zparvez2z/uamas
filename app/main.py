@@ -127,8 +127,27 @@ def current_catalog_quality_graph() -> CatalogQualityGraph:
     return catalog_quality_graph
 
 
+def _attribute_provider_diagnostics(llm: object) -> dict[str, object]:
+    diagnostics = getattr(llm, "diagnostics", None)
+    if callable(diagnostics):
+        return diagnostics()
+    use_mock = bool(getattr(llm, "use_mock", True))
+    return {
+        "provider": "mock" if use_mock else "legacy",
+        "model": getattr(llm, "model", "unknown"),
+        "revision": None,
+        "quantization": None,
+        "compute_dtype": None,
+        "device": None,
+        "runtime_mode": "MOCK" if use_mock else "LIVE",
+        "last_runtime": getattr(llm, "last_runtime", "unknown"),
+        "last_error": getattr(llm, "last_error", None),
+        "last_latency_ms": None,
+    }
+
+
 def build_diagnostics() -> dict:
-    token = os.getenv("GITHUB_TOKEN", "")
+    provider_diagnostics = _attribute_provider_diagnostics(pipeline.llm)
     classifier_diagnostics = pipeline.classifier.diagnostics()
     semantic_scorer = getattr(pipeline, "semantic_scorer", None)
     if semantic_scorer is not None and hasattr(semantic_scorer, "diagnostics"):
@@ -136,7 +155,7 @@ def build_diagnostics() -> dict:
     else:
         semantic_diagnostics = {
             "enabled": False,
-            "client_available": False,
+            "backend_configured": False,
             "threshold": None,
             "model": None,
             "degraded_rate": 0.0,
@@ -148,10 +167,15 @@ def build_diagnostics() -> dict:
     artifact_metadata = classifier_diagnostics.get("artifact_metadata", {}) or {}
     return {
         "status": "ok",
-        "runtime_mode": "MOCK" if pipeline.llm.use_mock else "LIVE",
+        "runtime_mode": provider_diagnostics["runtime_mode"],
+        "llm_provider": provider_diagnostics["provider"],
         "model": pipeline.llm.model,
+        "model_revision": provider_diagnostics["revision"],
+        "model_quantization": provider_diagnostics["quantization"],
+        "model_compute_dtype": provider_diagnostics["compute_dtype"],
+        "model_device": provider_diagnostics["device"],
         "endpoint": pipeline.llm.endpoint,
-        "token_present": bool(token),
+        "token_present": False,
         "security_environment": security.settings.environment,
         "authentication_enabled": security.enabled,
         "last_runtime": pipeline.llm.last_runtime,
@@ -189,9 +213,12 @@ def build_diagnostics() -> dict:
         "catalog_quality_graph_backend": catalog_graph_diagnostics.get("backend"),
         "catalog_quality_graph_reason": catalog_graph_diagnostics.get("reason"),
         "semantic_scorer_enabled": semantic_diagnostics.get("enabled"),
-        "semantic_scorer_client_available": semantic_diagnostics.get("client_available"),
+        "semantic_scorer_client_available": semantic_diagnostics.get("backend_configured"),
+        "semantic_scorer_provider": semantic_diagnostics.get("provider"),
         "semantic_scorer_threshold": semantic_diagnostics.get("threshold"),
         "semantic_scorer_model": semantic_diagnostics.get("model"),
+        "semantic_scorer_model_revision": semantic_diagnostics.get("revision"),
+        "semantic_scorer_device": semantic_diagnostics.get("device"),
         "semantic_scorer_degraded_rate": semantic_diagnostics.get("degraded_rate"),
         "semantic_scorer_degraded_requests": semantic_diagnostics.get("degraded_requests"),
         "persistence_available": persistence_diagnostics.get("available"),
@@ -226,6 +253,7 @@ def build_operational_metrics() -> OperationalMetrics:
         approved_review_task_count=int(persistence_metrics["approved_review_task_count"]),
         corrected_review_task_count=int(persistence_metrics["corrected_review_task_count"]),
         rejected_review_task_count=int(persistence_metrics["rejected_review_task_count"]),
+        cancelled_review_task_count=int(persistence_metrics["cancelled_review_task_count"]),
         review_status_counts=dict(persistence_metrics["review_status_counts"]),
         review_reason_counts=dict(persistence_metrics["review_reason_counts"]),
         auto_accept_count=int(persistence_metrics["auto_accept_count"]),
@@ -235,7 +263,7 @@ def build_operational_metrics() -> OperationalMetrics:
         correction_rate=float(persistence_metrics["correction_rate"]),
         semantic_degraded_rate=float(semantic_diagnostics.get("degraded_rate", 0.0)),
         semantic_degraded_requests=int(semantic_diagnostics.get("degraded_requests", 0)),
-        llm_runtime_mode="MOCK" if pipeline.llm.use_mock else "LIVE",
+        llm_runtime_mode=str(_attribute_provider_diagnostics(pipeline.llm)["runtime_mode"]),
         llm_last_runtime=pipeline.llm.last_runtime,
         llm_last_error=pipeline.llm.last_error,
         classifier_runtime=str(pipeline.classifier.diagnostics().get("runtime")),
@@ -337,7 +365,7 @@ def index(request: Request) -> HTMLResponse:
             "title": "",
             "description": "",
             "error": None,
-            "runtime": "MOCK" if pipeline.llm.use_mock else "LIVE",
+            "runtime": str(_attribute_provider_diagnostics(pipeline.llm)["runtime_mode"]),
             "model": pipeline.llm.model,
             "diagnostics": build_diagnostics(),
             "csrf_token": security.csrf_token(request),
@@ -386,7 +414,7 @@ def predict(
                     if security.settings.production
                     else str(exc)
                 ),
-                "runtime": "MOCK" if pipeline.llm.use_mock else "LIVE",
+                "runtime": str(pipeline.llm.diagnostics()["runtime_mode"]),
                 "model": pipeline.llm.model,
                 "diagnostics": build_diagnostics(),
                 "csrf_token": security.csrf_token(request),

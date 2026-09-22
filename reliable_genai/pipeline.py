@@ -31,6 +31,12 @@ class AttributeExtractionStageResult:
     runtime: str
     model: str
     error: str | None
+    provider: str = "unknown"
+    revision: str | None = None
+    quantization: str | None = None
+    compute_dtype: str | None = None
+    device: str | None = None
+    latency_ms: float | None = None
 
 
 class ReliabilityPipeline:
@@ -106,12 +112,43 @@ class ReliabilityPipeline:
 
     def extract_attributes(self, item: ProductInput) -> AttributeExtractionStageResult:
         attributes = self.llm.extract_attributes(item.title, item.description)
+        outcome = self.llm.last_outcome
         return AttributeExtractionStageResult(
             attributes=attributes,
             runtime=self.llm.last_runtime,
             model=self.llm.model,
             error=self.llm.last_error,
+            provider=self.llm.provider,
+            revision=(outcome.revision if outcome else self.llm.revision),
+            quantization=(outcome.quantization if outcome else self.llm.quantization),
+            compute_dtype=(outcome.compute_dtype if outcome else self.llm.compute_dtype),
+            device=(outcome.device if outcome else self.llm.device),
+            latency_ms=(outcome.latency_ms if outcome else self.llm.last_latency_ms),
         )
+
+    def preflight(self) -> dict[str, object]:
+        item = ProductInput(
+            title="Nike black running shoe size 42",
+            description="Breathable mesh training footwear.",
+        )
+        classification = self.classify(item)
+        extraction = self.extract_attributes(item)
+        semantic = self.score_semantic(
+            item,
+            candidate_labels=classification.candidate_category_set,
+        )
+        return {
+            "llm_runtime": extraction.runtime,
+            "llm_error": extraction.error,
+            "llm_provider": extraction.provider,
+            "llm_model": extraction.model,
+            "llm_model_revision": extraction.revision,
+            "llm_device": extraction.device,
+            "semantic_status": semantic.status,
+            "semantic_reason": semantic.reason,
+            "semantic_provider": semantic.provider,
+            "semantic_model": semantic.model,
+        }
 
     def score_semantic(
         self,
@@ -142,6 +179,12 @@ class ReliabilityPipeline:
             policy_action=policy.action,
             llm_runtime=extraction.runtime,
             llm_model=extraction.model,
+            llm_provider=extraction.provider,
+            llm_model_revision=extraction.revision,
+            llm_quantization=extraction.quantization,
+            llm_compute_dtype=extraction.compute_dtype,
+            llm_device=extraction.device,
+            llm_latency_ms=extraction.latency_ms,
             classifier_runtime=str(classifier_diagnostics["runtime"]),
             classifier_reason=classifier_diagnostics["reason"],
             classifier_artifact_path=classifier_diagnostics["artifact_path"],
@@ -157,6 +200,11 @@ class ReliabilityPipeline:
             semantic_consistency_score=semantic.score,
             semantic_consistency_status=semantic.status,
             semantic_consistency_reason=semantic.reason,
+            semantic_provider=semantic.provider,
+            semantic_model=semantic.model,
+            semantic_model_revision=semantic.revision,
+            semantic_device=semantic.device,
+            semantic_latency_ms=semantic.latency_ms,
             coverage_threshold=float(classifier_diagnostics["coverage_threshold"]),
         )
 

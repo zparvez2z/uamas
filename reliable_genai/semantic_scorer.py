@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import math
 import os
+import time
 from dataclasses import dataclass
-from typing import Iterable, Optional
-
-from azure.ai.inference import EmbeddingsClient
-from azure.core.credentials import AzureKeyCredential
+from typing import Iterable
 
 from .models import ProductInput
+from .providers.embeddings import (
+    EmbeddingBackend,
+    SentenceTransformerEmbeddingBackend,
+    semantic_runtime_config_from_env,
+)
 
 
 def _parse_bool(value: str | None, default: bool) -> bool:
@@ -42,6 +45,11 @@ class SemanticConsistencyResult:
     score: float | None
     status: str
     reason: str | None
+    provider: str | None = None
+    model: str | None = None
+    revision: str | None = None
+    device: str | None = None
+    latency_ms: float | None = None
 
 
 class SemanticConsistencyScorer:
@@ -63,16 +71,19 @@ class SemanticConsistencyScorer:
         enabled: bool | None = None,
         threshold: float | None = None,
         max_retries: int | None = None,
-        endpoint: str | None = None,
-        api_key: str | None = None,
+        provider: str | None = None,
         model: str | None = None,
+        revision: str | None = None,
+        device: str | None = None,
+        backend: EmbeddingBackend | None = None,
         prototypes: dict[str, str] | None = None,
     ) -> None:
+        runtime = semantic_runtime_config_from_env()
         self.labels = list(labels)
         self.enabled = (
             enabled
             if enabled is not None
-            else _parse_bool(os.getenv("ENABLE_SEMANTIC_SCORER"), default=True)
+            else _parse_bool(os.getenv("ENABLE_SEMANTIC_SCORER"), default=False)
         )
         self.threshold = (
             float(threshold)
@@ -82,18 +93,22 @@ class SemanticConsistencyScorer:
         self.max_retries = (
             int(max_retries) if max_retries is not None else int(os.getenv("SEMANTIC_MAX_RETRIES", "1"))
         )
-        self.endpoint = endpoint or os.getenv("GITHUB_MODELS_ENDPOINT", "https://models.github.ai/inference")
-        self.api_key = api_key or os.getenv("GITHUB_TOKEN", os.getenv("GITHUB_MODELS_API_KEY", ""))
-        self.model = model or os.getenv("GITHUB_MODELS_EMBEDDING_MODEL", "openai/text-embedding-3-small")
+        self.provider = provider or str(runtime["provider"])
+        if not self.enabled:
+            self.provider = "disabled"
+        self.model = model or str(runtime["model"])
+        self.revision = revision or str(runtime["revision"])
+        self.device = device or str(runtime["device"])
         self.prototypes = dict(self.DEFAULT_PROTOTYPES)
         if prototypes:
             self.prototypes.update(prototypes)
 
-        self._client: Optional[EmbeddingsClient] = None
-        if self.enabled and self.api_key:
-            self._client = EmbeddingsClient(
-                endpoint=self.endpoint,
-                credential=AzureKeyCredential(self.api_key),
+        self._backend = backend
+        if self.enabled and self.provider == "sentence_transformers" and backend is None:
+            self._backend = SentenceTransformerEmbeddingBackend(
+                model=self.model,
+                revision=self.revision,
+                device=self.device,
             )
 
         self._prototype_embedding_cache: dict[str, list[float]] = {}
@@ -105,6 +120,7 @@ class SemanticConsistencyScorer:
         }
 
     def score(self, item: ProductInput, candidate_labels: list[str] | None = None) -> SemanticConsistencyResult:
+        started = time.perf_counter()
         self._stats["requests"] += 1
 
         if not self.enabled:
@@ -113,13 +129,23 @@ class SemanticConsistencyScorer:
                 score=None,
                 status="disabled",
                 reason="semantic_scorer_disabled",
+                provider=self.provider,
+                model=self.model,
+                revision=self.revision,
+                device=self.device,
+                latency_ms=round((time.perf_counter() - started) * 1000, 3),
             )
-        if self._client is None:
+        if self._backend is None:
             self._stats["degraded_requests"] += 1
             return SemanticConsistencyResult(
                 score=None,
                 status="degraded",
-                reason="embedding_client_unavailable",
+                reason="embedding_backend_unavailable",
+                provider=self.provider,
+                model=self.model,
+                revision=self.revision,
+                device=self.device,
+                latency_ms=round((time.perf_counter() - started) * 1000, 3),
             )
 
         labels = [label for label in (candidate_labels or self.labels) if label in self.prototypes]
@@ -131,6 +157,11 @@ class SemanticConsistencyScorer:
                 score=None,
                 status="degraded",
                 reason="semantic_label_prototypes_unavailable",
+                provider=self.provider,
+                model=self.model,
+                revision=self.revision,
+                device=self.device,
+                latency_ms=round((time.perf_counter() - started) * 1000, 3),
             )
 
         text = f"{item.title} {item.description}".strip()
@@ -143,6 +174,11 @@ class SemanticConsistencyScorer:
                 score=None,
                 status="degraded",
                 reason=f"{type(exc).__name__}: {exc}",
+                provider=self.provider,
+                model=self.model,
+                revision=self.revision,
+                device=self.device,
+                latency_ms=round((time.perf_counter() - started) * 1000, 3),
             )
 
         similarities = [_cosine_similarity(query_vector, vector) for vector in prototype_vectors.values()]
@@ -152,6 +188,11 @@ class SemanticConsistencyScorer:
                 score=None,
                 status="degraded",
                 reason="semantic_similarity_unavailable",
+                provider=self.provider,
+                model=self.model,
+                revision=self.revision,
+                device=self.device,
+                latency_ms=round((time.perf_counter() - started) * 1000, 3),
             )
 
         score = _clamp((max(similarities) + 1.0) / 2.0, 0.0, 1.0)
@@ -160,6 +201,11 @@ class SemanticConsistencyScorer:
             score=score,
             status="ok",
             reason=None,
+            provider=self.provider,
+            model=self.model,
+            revision=self.revision,
+            device=self.device,
+            latency_ms=round((time.perf_counter() - started) * 1000, 3),
         )
 
     def diagnostics(self) -> dict[str, object]:
@@ -168,9 +214,11 @@ class SemanticConsistencyScorer:
         return {
             "enabled": self.enabled,
             "threshold": self.threshold,
+            "provider": self.provider,
             "model": self.model,
-            "endpoint": self.endpoint,
-            "client_available": self._client is not None,
+            "revision": self.revision,
+            "device": self.device,
+            "backend_configured": self._backend is not None,
             "requests": requests,
             "ok_requests": self._stats["ok_requests"],
             "degraded_requests": degraded,
@@ -187,13 +235,12 @@ class SemanticConsistencyScorer:
         return {label: self._prototype_embedding_cache[label] for label in labels}
 
     def _embed_texts(self, texts: list[str]) -> list[list[float]]:
-        if self._client is None:
-            raise RuntimeError("embedding client unavailable")
+        if self._backend is None:
+            raise RuntimeError("embedding backend unavailable")
         last_exception: Exception | None = None
         for _ in range(self.max_retries + 1):
             try:
-                result = self._client.embed(input=texts, model=self.model)
-                vectors = [self._extract_vector(item) for item in result.data]
+                vectors = self._backend.embed(texts)
                 if len(vectors) != len(texts):
                     raise RuntimeError(
                         f"embedding result count mismatch: expected {len(texts)} vectors, got {len(vectors)}"
@@ -203,11 +250,3 @@ class SemanticConsistencyScorer:
                 last_exception = exc
                 continue
         raise RuntimeError(f"embedding_request_failed: {last_exception}")
-
-    @staticmethod
-    def _extract_vector(item: object) -> list[float]:
-        if isinstance(item, dict):
-            vector = item.get("embedding", [])
-            return [float(value) for value in vector]
-        vector = getattr(item, "embedding", [])
-        return [float(value) for value in vector]

@@ -276,3 +276,70 @@ def test_campaign_plan_cli_does_not_create_database(tmp_path: Path) -> None:
     assert "reference_category" not in (
         Path(__file__).parent.parent / "app" / "templates" / "review.html"
     ).read_text(encoding="utf-8")
+
+
+def test_campaign_invalidation_cancels_tasks_and_excludes_export(tmp_path: Path) -> None:
+    pool_path, metadata_path = _write_feedback_pool(tmp_path)
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    service = ReviewCampaignService(
+        store,
+        analyzer=FakeAnalyzer(store),
+        feedback_pool_path=pool_path,
+        metadata_path=metadata_path,
+        labels=("Shoes", "Sports"),
+    )
+    campaign = service.create(
+        name="failed-provider-pilot",
+        per_category=1,
+        seed=3,
+        runtime_mode="LOCAL_HF",
+    )
+    service.run(str(campaign["id"]), limit=2)
+
+    result = service.invalidate(
+        str(campaign["id"]),
+        reason="retired provider produced fallback evidence",
+    )
+
+    assert result["status"] == "invalidated"
+    assert result["invalidation_reason"] == "retired provider produced fallback evidence"
+    assert result["review_status_counts"] == {"cancelled": 2}
+    assert store.list_feedback_export_candidates() == []
+
+
+def test_strict_campaign_preflight_fails_before_claiming_items(tmp_path: Path) -> None:
+    pool_path, metadata_path = _write_feedback_pool(tmp_path)
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    analyzer = FakeAnalyzer(store)
+    service = ReviewCampaignService(
+        store,
+        analyzer=analyzer,
+        feedback_pool_path=pool_path,
+        metadata_path=metadata_path,
+        labels=("Shoes", "Sports"),
+        runtime_probe=lambda: {
+            "llm_runtime": "FAILED",
+            "semantic_status": "degraded",
+        },
+    )
+    campaign = service.create(
+        name="strict",
+        per_category=1,
+        seed=3,
+        runtime_mode="LOCAL_HF",
+    )
+
+    try:
+        service.run(
+            str(campaign["id"]),
+            limit=2,
+            require_runtime="LOCAL_HF",
+            abort_on_degraded=True,
+        )
+        assert False, "expected strict preflight failure"
+    except RuntimeError as exc:
+        assert "preflight" in str(exc)
+
+    status = service.status(str(campaign["id"]))
+    assert status["item_state_counts"] == {"selected": 2}
+    assert analyzer.calls == 0

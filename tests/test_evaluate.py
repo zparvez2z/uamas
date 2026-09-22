@@ -178,9 +178,11 @@ def test_run_evaluation_computes_labeled_metrics(monkeypatch) -> None:
     assert isinstance(aggregated["semantic_low_consistency_count"], int)
     assert isinstance(aggregated["semantic_degraded_count"], int)
     assert aggregated["runtime_breakdown"] == {
+        "local_hf_count": 0,
         "live_count": 0,
         "mock_count": 3,
         "fallback_mock_count": 0,
+        "failed_count": 0,
         "fallback_rate": 0.0,
     }
     assert metrics["target_coverage"] == 0.7
@@ -360,7 +362,7 @@ def test_save_results_includes_runtime_breakdown(monkeypatch, tmp_path) -> None:
     report = output.read_text(encoding="utf-8")
 
     assert "## LLM Runtime Breakdown" in report
-    assert "- LIVE calls: 1" in report
+    assert "- legacy LIVE calls: 1" in report
     assert "- FALLBACK_MOCK calls: 1" in report
 
 

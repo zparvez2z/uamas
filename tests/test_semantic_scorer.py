@@ -2,22 +2,22 @@ from reliable_genai.models import ProductInput
 from reliable_genai.semantic_scorer import SemanticConsistencyScorer
 
 
-class FakeEmbedResult:
-    def __init__(self, vectors):
-        self.data = [{"embedding": vector} for vector in vectors]
+class FakeEmbeddingBackend:
+    provider = "fake"
+    model = "fake-embedding-model"
+    revision = "test-revision"
+    device = "cpu"
 
-
-class FakeEmbeddingsClient:
     def __init__(self, vector_map, should_fail=False):
         self.vector_map = vector_map
         self.should_fail = should_fail
         self.calls = 0
 
-    def embed(self, *, input, model):
+    def embed(self, texts):
         self.calls += 1
         if self.should_fail:
             raise RuntimeError("embedding backend unavailable")
-        return FakeEmbedResult([self.vector_map[text] for text in input])
+        return [self.vector_map[text] for text in texts]
 
 
 def test_semantic_scorer_returns_bounded_score() -> None:
@@ -25,9 +25,9 @@ def test_semantic_scorer_returns_bounded_score() -> None:
     scorer = SemanticConsistencyScorer(
         labels,
         enabled=True,
-        endpoint="https://models.github.ai/inference",
-        api_key="test-token",
-        model="openai/text-embedding-3-small",
+        provider="fake",
+        model="fake-embedding-model",
+        backend=FakeEmbeddingBackend({}),
     )
 
     query_text = "nike running shoe breathable mesh"
@@ -36,7 +36,7 @@ def test_semantic_scorer_returns_bounded_score() -> None:
         scorer.prototypes["Shoes"]: [0.9, 0.1],
         scorer.prototypes["Clothing"]: [0.0, 1.0],
     }
-    scorer._client = FakeEmbeddingsClient(vector_map)
+    scorer._backend = FakeEmbeddingBackend(vector_map)
     item = ProductInput(title="nike running shoe", description="breathable mesh")
 
     result = scorer.score(item, candidate_labels=["Shoes", "Clothing"])
@@ -46,6 +46,10 @@ def test_semantic_scorer_returns_bounded_score() -> None:
     assert result.score is not None
     assert 0.0 <= result.score <= 1.0
     assert scorer.diagnostics()["ok_requests"] == 1
+    assert result.provider == "fake"
+    assert result.model == "fake-embedding-model"
+    assert result.revision is not None
+    assert result.latency_ms is not None
 
 
 def test_semantic_scorer_degrades_gracefully_on_embedding_failure() -> None:
@@ -53,11 +57,10 @@ def test_semantic_scorer_degrades_gracefully_on_embedding_failure() -> None:
     scorer = SemanticConsistencyScorer(
         labels,
         enabled=True,
-        endpoint="https://models.github.ai/inference",
-        api_key="test-token",
-        model="openai/text-embedding-3-small",
+        provider="fake",
+        model="fake-embedding-model",
+        backend=FakeEmbeddingBackend({}, should_fail=True),
     )
-    scorer._client = FakeEmbeddingsClient({}, should_fail=True)
 
     result = scorer.score(ProductInput(title="nike shoe", description="black size 42"))
 
