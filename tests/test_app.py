@@ -526,6 +526,9 @@ def test_review_queue_decision_endpoint_updates_task(monkeypatch, tmp_path: Path
             corrected_category="Sports",
             corrected_attributes={"material": "rubber"},
             notes="Reviewer corrected the category.",
+            reviewer_type="ai_assisted",
+            reviewer_id="untrusted-client-value",
+            reviewer_confidence=0.9,
         ),
     )
 
@@ -534,6 +537,9 @@ def test_review_queue_decision_endpoint_updates_task(monkeypatch, tmp_path: Path
     assert updated.corrected_category == "Sports"
     assert updated.corrected_attributes == {"material": "rubber"}
     assert updated.notes == "Reviewer corrected the category."
+    assert updated.reviewer_type == "human"
+    assert updated.reviewer_id == "api_operator"
+    assert updated.reviewer_confidence == 0.9
 
     assert app_main.list_review_queue() == []
 

@@ -1,0 +1,80 @@
+{
+  "action_counts": {
+    "approve": 5,
+    "correct": 112,
+    "reject": 3
+  },
+  "ai_assisted_action_counts": {
+    "approve": 5,
+    "correct": 112,
+    "reject": 3
+  },
+  "ai_assisted_correction_rate": 0.957,
+  "ai_assisted_final_category_counts": {
+    "Beauty": 14,
+    "Clothing": 14,
+    "Electronics": 22,
+    "Home": 30,
+    "Shoes": 12,
+    "Sports": 25
+  },
+  "ai_assisted_reference_agreement": 0.803,
+  "ai_assisted_reference_comparable_count": 117,
+  "ai_assisted_resolved_count": 120,
+  "campaign_id": "cmp_adca837f21fc1e25",
+  "campaign_status": "completed",
+  "correction_rate": 0.0,
+  "final_category_counts": {
+    "Beauty": 0,
+    "Clothing": 0,
+    "Electronics": 0,
+    "Home": 0,
+    "Shoes": 0,
+    "Sports": 0
+  },
+  "human_action_counts": {},
+  "human_correction_rate": 0.0,
+  "human_reference_agreement": 0.0,
+  "human_reference_comparable_count": 0,
+  "human_resolved_count": 0,
+  "llm_failed_rate": 0.0,
+  "llm_fallback_rate": 0.0,
+  "llm_provider_counts": {
+    "huggingface_local": 120
+  },
+  "llm_runtime_counts": {
+    "LOCAL_HF": 120
+  },
+  "model_reference_agreement": 0.839,
+  "model_reference_comparable_count": 31,
+  "model_reviewer_agreement": 0.0,
+  "model_reviewer_comparable_count": 0,
+  "processed_prediction_count": 120,
+  "readiness": {
+    "category_coverage_ready": false,
+    "eligible_reviewer_type": "human",
+    "minimum_corrections": 10,
+    "minimum_eligible": 80,
+    "minimum_per_category": 10,
+    "minimum_resolved": 100,
+    "processing_complete": true,
+    "ready_for_retraining": false
+  },
+  "resolved_count": 120,
+  "review_reason_counts": {
+    "Prediction set outside usability constraints": 89,
+    "campaign_control": 27,
+    "low_confidence": 4
+  },
+  "reviewer_reference_agreement": 0.0,
+  "reviewer_type_counts": {
+    "ai_assisted": 120
+  },
+  "selected_count": 120,
+  "selection_type_counts": {
+    "control_auto_accept": 27,
+    "policy_triggered": 93
+  },
+  "semantic_degraded_rate": 0.0,
+  "training_eligible_count": 0
+}

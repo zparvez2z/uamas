@@ -111,6 +111,37 @@ def test_feedback_export_dry_run_does_not_write_or_register(
     assert store.get_feedback_export_batch(str(first.batch_id)) is None
 
 
+def test_feedback_export_excludes_ai_assisted_decisions(tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    task_id = _resolved_workflow_review(
+        store,
+        title="Trail shoes",
+        category_set=["Shoes"],
+        decision=ReviewDecision(
+            action="approve",
+            notes="Clear shoe listing.",
+            reviewer_type="ai_assisted",
+            reviewer_id="codex-review-v1",
+            reviewer_confidence=0.97,
+        ),
+    )
+
+    result = FeedbackExporter(store, output_root=tmp_path / "feedback").run()
+
+    assert result.selected_count == 1
+    assert result.training_eligible_count == 0
+    assert result.excluded_count == 1
+    assert result.summary["exclusion_reason_counts"] == {
+        "non_human_review": 1
+    }
+    row = FeedbackExporter(store)._build_evidence(
+        store.list_feedback_export_candidates()[0]
+    )
+    assert row["review"]["task_id"] == task_id
+    assert row["review"]["reviewer_type"] == "ai_assisted"
+    assert row["validation"]["training_eligible"] is False
+
+
 def test_feedback_export_separates_training_and_excluded_records(
     tmp_path: Path,
 ) -> None:

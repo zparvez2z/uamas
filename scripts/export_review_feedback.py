@@ -14,8 +14,8 @@ from reliable_genai.persistence import SQLiteReviewStore
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Export resolved human reviews as validated, versioned feedback "
-            "evidence and training examples."
+            "Export resolved reviews as validated, versioned evidence; only "
+            "eligible human decisions become training examples."
         )
     )
     parser.add_argument(

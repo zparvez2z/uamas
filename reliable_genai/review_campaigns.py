@@ -330,8 +330,12 @@ class ReviewCampaignService:
         status = store.review_campaign_status(campaign_id)
         rows = store.list_review_campaign_report_rows(campaign_id)
         action_counts: Counter[str] = Counter()
+        human_action_counts: Counter[str] = Counter()
+        ai_action_counts: Counter[str] = Counter()
+        reviewer_type_counts: Counter[str] = Counter()
         selection_counts: Counter[str] = Counter()
         final_category_counts: Counter[str] = Counter()
+        ai_final_category_counts: Counter[str] = Counter()
         review_reason_counts: Counter[str] = Counter()
         model_reviewer_matches = 0
         model_reference_matches = 0
@@ -339,6 +343,8 @@ class ReviewCampaignService:
         model_comparable = 0
         reviewer_comparable = 0
         three_way_comparable = 0
+        ai_reference_matches = 0
+        ai_comparable = 0
         degraded_count = 0
         fallback_count = 0
         failed_runtime_count = 0
@@ -370,6 +376,13 @@ class ReviewCampaignService:
                 "rejected": "reject",
             }[str(review_status)]
             action_counts[action] += 1
+            reviewer_type = str(row.get("reviewer_type") or "human")
+            reviewer_type_counts[reviewer_type] += 1
+            is_human = reviewer_type == "human"
+            if is_human:
+                human_action_counts[action] += 1
+            else:
+                ai_action_counts[action] += 1
             review_reason_counts[str(row.get("review_reason") or "unknown")] += 1
             categories = json.loads(row["category_set_json"] or "[]")
             model_category = categories[0] if categories else None
@@ -385,20 +398,35 @@ class ReviewCampaignService:
                     model_category == reference_category
                 )
             if reviewer_category is not None:
-                reviewer_comparable += 1
-                final_category_counts[str(reviewer_category)] += 1
-                reviewer_reference_matches += int(
-                    reviewer_category == reference_category
-                )
-            if model_category is not None and reviewer_category is not None:
+                if is_human:
+                    reviewer_comparable += 1
+                    final_category_counts[str(reviewer_category)] += 1
+                    reviewer_reference_matches += int(
+                        reviewer_category == reference_category
+                    )
+                else:
+                    ai_comparable += 1
+                    ai_final_category_counts[str(reviewer_category)] += 1
+                    ai_reference_matches += int(
+                        reviewer_category == reference_category
+                    )
+            if (
+                is_human
+                and model_category is not None
+                and reviewer_category is not None
+            ):
                 three_way_comparable += 1
                 model_reviewer_matches += int(
                     model_category == reviewer_category
                 )
 
         resolved_count = sum(action_counts.values())
+        human_resolved_count = sum(human_action_counts.values())
         eligible_count = sum(final_category_counts.values())
-        correction_count = action_counts["correct"]
+        correction_count = human_action_counts["correct"]
+        ai_decided_count = (
+            ai_action_counts["approve"] + ai_action_counts["correct"]
+        )
         item_states = status["item_state_counts"]
         assert isinstance(item_states, dict)
         no_processing_failures = (
@@ -411,7 +439,7 @@ class ReviewCampaignService:
             for label in self.labels
         )
         ready = (
-            resolved_count >= minimum_resolved
+            human_resolved_count >= minimum_resolved
             and eligible_count >= minimum_eligible
             and correction_count >= minimum_corrections
             and category_ready
@@ -429,29 +457,54 @@ class ReviewCampaignService:
             "campaign_status": status["status"],
             "selected_count": status["selected_count"],
             "resolved_count": resolved_count,
+            "human_resolved_count": human_resolved_count,
+            "ai_assisted_resolved_count": reviewer_type_counts["ai_assisted"],
             "training_eligible_count": eligible_count,
             "processed_prediction_count": processed_count,
             "llm_runtime_counts": dict(sorted(runtime_counts.items())),
             "llm_provider_counts": dict(sorted(provider_counts.items())),
             "action_counts": dict(sorted(action_counts.items())),
+            "human_action_counts": dict(sorted(human_action_counts.items())),
+            "ai_assisted_action_counts": dict(sorted(ai_action_counts.items())),
+            "reviewer_type_counts": dict(sorted(reviewer_type_counts.items())),
             "selection_type_counts": dict(sorted(selection_counts.items())),
             "review_reason_counts": dict(sorted(review_reason_counts.items())),
             "final_category_counts": {
                 label: final_category_counts[label] for label in self.labels
             },
+            "ai_assisted_final_category_counts": {
+                label: ai_final_category_counts[label] for label in self.labels
+            },
             "correction_rate": rate(correction_count, eligible_count),
+            "human_correction_rate": rate(correction_count, eligible_count),
+            "ai_assisted_correction_rate": rate(
+                ai_action_counts["correct"],
+                ai_decided_count,
+            ),
             "model_reviewer_agreement": rate(
                 model_reviewer_matches,
                 three_way_comparable,
             ),
+            "model_reviewer_comparable_count": three_way_comparable,
             "model_reference_agreement": rate(
                 model_reference_matches,
                 model_comparable,
             ),
+            "model_reference_comparable_count": model_comparable,
             "reviewer_reference_agreement": rate(
                 reviewer_reference_matches,
                 reviewer_comparable,
             ),
+            "human_reference_agreement": rate(
+                reviewer_reference_matches,
+                reviewer_comparable,
+            ),
+            "human_reference_comparable_count": reviewer_comparable,
+            "ai_assisted_reference_agreement": rate(
+                ai_reference_matches,
+                ai_comparable,
+            ),
+            "ai_assisted_reference_comparable_count": ai_comparable,
             "semantic_degraded_rate": rate(degraded_count, processed_count),
             "llm_fallback_rate": rate(fallback_count, processed_count),
             "llm_failed_rate": rate(failed_runtime_count, processed_count),
@@ -461,6 +514,7 @@ class ReviewCampaignService:
                 "minimum_eligible": minimum_eligible,
                 "minimum_corrections": minimum_corrections,
                 "minimum_per_category": minimum_per_category,
+                "eligible_reviewer_type": "human",
                 "category_coverage_ready": category_ready,
                 "processing_complete": no_processing_failures,
             },

@@ -15,6 +15,7 @@ from reliable_genai.models import (
 )
 from reliable_genai.persistence import SQLiteReviewStore
 from reliable_genai.review_campaigns import ReviewCampaignService
+from scripts.ai_assisted_review import apply_decision_packet, export_blind_packet
 from scripts.load_dataset import split_fingerprint
 
 
@@ -246,6 +247,73 @@ def test_campaign_rejects_tampered_feedback_pool(tmp_path: Path) -> None:
         assert False, "expected fingerprint mismatch"
     except ValueError as exc:
         assert "fingerprint" in str(exc)
+
+
+def test_ai_assisted_campaign_review_is_blind_and_not_training_ready(
+    tmp_path: Path,
+) -> None:
+    pool_path, metadata_path = _write_feedback_pool(tmp_path)
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    service = ReviewCampaignService(
+        store,
+        analyzer=FakeAnalyzer(store),
+        feedback_pool_path=pool_path,
+        metadata_path=metadata_path,
+        labels=("Shoes", "Sports"),
+    )
+    campaign = service.create(
+        name="ai-assisted",
+        per_category=1,
+        seed=7,
+        runtime_mode="MOCK",
+    )
+    service.run(campaign["id"], limit=10)
+
+    packet = export_blind_packet(store, campaign["id"])
+    assert len(packet["items"]) == 2
+    assert "reference_category" not in json.dumps(packet)
+    decisions = []
+    for item in packet["items"]:
+        is_sports = "sports" in item["title"].lower()
+        decisions.append(
+            {
+                "task_id": item["task_id"],
+                "action": "correct" if is_sports else "approve",
+                "corrected_category": "Sports" if is_sports else None,
+                "confidence": 0.95,
+                "notes": "Decision based only on visible product text.",
+            }
+        )
+    result = apply_decision_packet(
+        store,
+        {
+            "schema_version": "1.0",
+            "campaign_id": campaign["id"],
+            "reviewer": {"id": "codex-review-v1"},
+            "decisions": decisions,
+        },
+        campaign_id=campaign["id"],
+    )
+
+    assert result["applied_count"] == 2
+    report = service.report(
+        campaign["id"],
+        minimum_resolved=2,
+        minimum_eligible=2,
+        minimum_corrections=1,
+        minimum_per_category=1,
+    )
+    assert report["resolved_count"] == 2
+    assert report["human_resolved_count"] == 0
+    assert report["ai_assisted_resolved_count"] == 2
+    assert report["training_eligible_count"] == 0
+    assert report["ai_assisted_reference_agreement"] == 1.0
+    assert report["ai_assisted_reference_comparable_count"] == 2
+    assert report["model_reference_comparable_count"] == 2
+    assert report["human_reference_comparable_count"] == 0
+    assert report["ai_assisted_correction_rate"] == 0.5
+    assert report["readiness"]["eligible_reviewer_type"] == "human"
+    assert report["readiness"]["ready_for_retraining"] is False
 
 
 def test_campaign_plan_cli_does_not_create_database(tmp_path: Path) -> None:

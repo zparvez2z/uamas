@@ -249,7 +249,7 @@ Dashboard updates:
 ### Phase 5: Feedback Loop
 Use human corrections as evidence.
 
-Status: **implemented through controlled evidence collection and export**. A balanced, disjoint feedback pool feeds deterministic review campaigns. Campaigns preserve natural policy outcomes, add explicit auto-accept controls, hide source reference labels from reviewers, support bounded execution, report aggregate agreement/readiness, and export validated, deduplicated JSONL evidence. Retraining and artifact promotion remain explicit follow-up work.
+Status: **implemented through controlled evidence collection and export**. A balanced, disjoint feedback pool feeds deterministic review campaigns. Campaigns preserve natural policy outcomes, add explicit auto-accept controls, hide source reference labels from reviewers, support bounded execution, report aggregate agreement/readiness, and export validated, deduplicated JSONL evidence. Reviewer provenance distinguishes human evidence from AI-assisted diagnostics; only human decisions can satisfy retraining readiness and training eligibility. Retraining and artifact promotion remain explicit follow-up work.
 
 Add:
 - [x] export reviewed examples,

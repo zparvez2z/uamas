@@ -12,7 +12,7 @@ from .persistence import SQLiteReviewStore
 from .pipeline import ReliabilityPipeline
 
 
-FEEDBACK_SCHEMA_VERSION = "1.0"
+FEEDBACK_SCHEMA_VERSION = "1.1"
 DEFAULT_FEEDBACK_OUTPUT_DIR = Path("data/feedback")
 STATUS_ACTIONS = {
     "approved": "approve",
@@ -191,6 +191,7 @@ class FeedbackExporter:
                     validation_errors.append("unknown_predicted_category")
 
         review_status = str(row["review_status"])
+        reviewer_type = str(row.get("reviewer_type") or "human")
         action = STATUS_ACTIONS[review_status]
         corrected_category = row.get("corrected_category")
         exclusion_reason: str | None = None
@@ -213,6 +214,8 @@ class FeedbackExporter:
 
         if validation_errors:
             exclusion_reason = validation_errors[0]
+        elif reviewer_type != "human":
+            exclusion_reason = "non_human_review"
 
         training_eligible = (
             not validation_errors
@@ -260,6 +263,9 @@ class FeedbackExporter:
                 "risk_level": row["review_risk_level"],
                 "corrected_category": corrected_category,
                 "corrected_attributes": correction_attributes,
+                "reviewer_type": reviewer_type,
+                "reviewer_id": row.get("reviewer_id"),
+                "reviewer_confidence": row.get("reviewer_confidence"),
                 "created_at": row["review_created_at"],
                 "decided_at": row["review_updated_at"],
             },
@@ -354,6 +360,9 @@ class FeedbackExporter:
         reason_counts = Counter(
             str(record["review"]["reason"]) for record in evidence
         )
+        reviewer_type_counts = Counter(
+            str(record["review"]["reviewer_type"]) for record in evidence
+        )
         exclusion_counts = Counter(
             str(record["validation"]["exclusion_reason"])
             for record in evidence
@@ -391,6 +400,7 @@ class FeedbackExporter:
             "excluded_count": len(evidence) - training_eligible_count,
             "action_counts": dict(sorted(action_counts.items())),
             "review_reason_counts": dict(sorted(reason_counts.items())),
+            "reviewer_type_counts": dict(sorted(reviewer_type_counts.items())),
             "exclusion_reason_counts": dict(sorted(exclusion_counts.items())),
             "correction_count": action_counts["correct"],
             "correction_rate": _round_rate(

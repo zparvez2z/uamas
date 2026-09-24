@@ -1,0 +1,1126 @@
+{
+  "acceptance": {
+    "no_fallback_or_failed_calls": true,
+    "schema_success_complete": true
+  },
+  "dataset": "data/benchmarks/attribute_extraction_v1.json",
+  "dataset_count": 30,
+  "deterministic_baseline": {
+    "count": 30,
+    "details": [
+      {
+        "error": null,
+        "expected": {
+          "brand": "nike",
+          "color": "black",
+          "material": "mesh",
+          "size": "42"
+        },
+        "latency_ms": 0.024,
+        "predicted": {
+          "brand": "nike",
+          "color": "black",
+          "material": "mesh",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Nike Air running shoe"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "adidas",
+          "color": "white",
+          "material": "leather",
+          "size": "43"
+        },
+        "latency_ms": 0.012,
+        "predicted": {
+          "brand": "adidas",
+          "color": "white",
+          "material": "leather",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Adidas walking trainers"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "puma",
+          "color": "blue",
+          "material": "mesh",
+          "size": "44"
+        },
+        "latency_ms": 0.009,
+        "predicted": {
+          "brand": "puma",
+          "color": "blue",
+          "material": "mesh",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Puma sports sneaker"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "brown",
+          "material": "leather",
+          "size": "42"
+        },
+        "latency_ms": 0.009,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "leather",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Classic leather boot"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "green",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "latency_ms": 0.009,
+        "predicted": {
+          "brand": "unknown",
+          "color": "green",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Trail shoe"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "red",
+          "material": "cotton",
+          "size": "m"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "unknown",
+          "color": "red",
+          "material": "cotton",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Cotton crew-neck shirt"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "adidas",
+          "color": "black",
+          "material": "polyester",
+          "size": "xl"
+        },
+        "latency_ms": 0.008,
+        "predicted": {
+          "brand": "adidas",
+          "color": "black",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Adidas training jacket"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "blue",
+          "material": "linen",
+          "size": "s"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "unknown",
+          "color": "blue",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Summer dress"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "nike",
+          "color": "gray",
+          "material": "cotton blend",
+          "size": "l"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "nike",
+          "color": "gray",
+          "material": "cotton",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Nike sports hoodie"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Everyday trousers"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "apple",
+          "color": "white",
+          "material": "plastic",
+          "size": "unknown"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "apple",
+          "color": "white",
+          "material": "plastic",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Apple USB-C charger"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "samsung",
+          "color": "black",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "latency_ms": 0.008,
+        "predicted": {
+          "brand": "samsung",
+          "color": "black",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Samsung wireless headphones"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "blue",
+          "material": "metal",
+          "size": "unknown"
+        },
+        "latency_ms": 0.008,
+        "predicted": {
+          "brand": "unknown",
+          "color": "blue",
+          "material": "metal",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Portable Bluetooth speaker"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "silver",
+          "material": "aluminum",
+          "size": "unknown"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Laptop stand"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "clear",
+          "material": "tempered glass",
+          "size": "6.1-inch"
+        },
+        "latency_ms": 0.009,
+        "predicted": {
+          "brand": "unknown",
+          "color": "red",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Phone screen protector"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "ikea",
+          "color": "white",
+          "material": "wood",
+          "size": "40 cm"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "ikea",
+          "color": "white",
+          "material": "wood",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "IKEA bedside table"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "clear",
+          "material": "glass",
+          "size": "1l"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "1l"
+        },
+        "runtime": "MOCK",
+        "title": "Kitchen storage jar"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "metal",
+          "size": "unknown"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "metal",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Desk lamp"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "white",
+          "material": "cotton",
+          "size": "70 x 140 cm"
+        },
+        "latency_ms": 0.006,
+        "predicted": {
+          "brand": "unknown",
+          "color": "white",
+          "material": "cotton",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Bath towel"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "green",
+          "material": "velvet",
+          "size": "45 x 45 cm"
+        },
+        "latency_ms": 0.008,
+        "predicted": {
+          "brand": "unknown",
+          "color": "green",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Sofa cushion cover"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "50ml"
+        },
+        "latency_ms": 0.008,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Hydrating face cream"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "500ml"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "500ml"
+        },
+        "runtime": "MOCK",
+        "title": "Daily shampoo"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "30 ml"
+        },
+        "latency_ms": 0.008,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Vitamin C serum"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "red",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "unknown",
+          "color": "red",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Matte lipstick"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "latency_ms": 0.022,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Face cleanser"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "blue",
+          "material": "foam",
+          "size": "6 mm"
+        },
+        "latency_ms": 0.008,
+        "predicted": {
+          "brand": "unknown",
+          "color": "blue",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Yoga mat"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "metal",
+          "size": "10 kg"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "metal",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Training dumbbell"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "graphite",
+          "size": "grip size 3"
+        },
+        "latency_ms": 0.008,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Tennis racket"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "white and black",
+          "material": "synthetic leather",
+          "size": "5"
+        },
+        "latency_ms": 0.007,
+        "predicted": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "leather",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Football"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "latex",
+          "size": "unknown"
+        },
+        "latency_ms": 0.008,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "MOCK",
+        "title": "Resistance band set"
+      }
+    ],
+    "field_exact_accuracy": 0.717,
+    "hallucination_rate": 0.0,
+    "median_latency_ms": 0.008,
+    "model": "deterministic-rule-extractor",
+    "name": "deterministic_baseline",
+    "p95_latency_ms": 0.022,
+    "provider": "mock",
+    "revision": null,
+    "runtime_counts": {
+      "MOCK": 30
+    },
+    "schema_success_rate": 1.0,
+    "unknown_correctness_rate": 1.0
+  },
+  "gpu_peak_memory_mb": 7461.35,
+  "qwen_local_hf": {
+    "count": 30,
+    "details": [
+      {
+        "error": null,
+        "expected": {
+          "brand": "nike",
+          "color": "black",
+          "material": "mesh",
+          "size": "42"
+        },
+        "latency_ms": 4779.726,
+        "predicted": {
+          "brand": "Nike",
+          "color": "Black",
+          "material": "mesh",
+          "size": "42"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Nike Air running shoe"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "adidas",
+          "color": "white",
+          "material": "leather",
+          "size": "43"
+        },
+        "latency_ms": 5798.487,
+        "predicted": {
+          "brand": "Adidas",
+          "color": "White",
+          "material": "leather",
+          "size": "43"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Adidas walking trainers"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "puma",
+          "color": "blue",
+          "material": "mesh",
+          "size": "44"
+        },
+        "latency_ms": 4904.195,
+        "predicted": {
+          "brand": "Puma",
+          "color": "Blue",
+          "material": "mesh",
+          "size": "44"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Puma sports sneaker"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "brown",
+          "material": "leather",
+          "size": "42"
+        },
+        "latency_ms": 6005.743,
+        "predicted": {
+          "brand": "unknown",
+          "color": "Brown",
+          "material": "full-grain leather",
+          "size": "42"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Classic leather boot"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "green",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "latency_ms": 5010.665,
+        "predicted": {
+          "brand": "unknown",
+          "color": "green",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Trail shoe"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "red",
+          "material": "cotton",
+          "size": "m"
+        },
+        "latency_ms": 5655.039,
+        "predicted": {
+          "brand": "unknown",
+          "color": "Red",
+          "material": "Cotton",
+          "size": "M"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Cotton crew-neck shirt"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "adidas",
+          "color": "black",
+          "material": "polyester",
+          "size": "xl"
+        },
+        "latency_ms": 4869.041,
+        "predicted": {
+          "brand": "Adidas",
+          "color": "Black",
+          "material": "polyester",
+          "size": "XL"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Adidas training jacket"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "blue",
+          "material": "linen",
+          "size": "s"
+        },
+        "latency_ms": 5219.911,
+        "predicted": {
+          "brand": "unknown",
+          "color": "Blue",
+          "material": "linen",
+          "size": "S"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Summer dress"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "nike",
+          "color": "gray",
+          "material": "cotton blend",
+          "size": "l"
+        },
+        "latency_ms": 5664.887,
+        "predicted": {
+          "brand": "Nike",
+          "color": "Gray",
+          "material": "cotton blend",
+          "size": "L"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Nike sports hoodie"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "latency_ms": 4972.984,
+        "predicted": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Everyday trousers"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "apple",
+          "color": "white",
+          "material": "plastic",
+          "size": "unknown"
+        },
+        "latency_ms": 5645.728,
+        "predicted": {
+          "brand": "Apple",
+          "color": "White",
+          "material": "plastic",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Apple USB-C charger"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "samsung",
+          "color": "black",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "latency_ms": 4697.572,
+        "predicted": {
+          "brand": "Samsung",
+          "color": "Black",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Samsung wireless headphones"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "blue",
+          "material": "metal",
+          "size": "unknown"
+        },
+        "latency_ms": 5098.251,
+        "predicted": {
+          "brand": "unknown",
+          "color": "Blue",
+          "material": "metal",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Portable Bluetooth speaker"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "silver",
+          "material": "aluminum",
+          "size": "unknown"
+        },
+        "latency_ms": 4891.344,
+        "predicted": {
+          "brand": "unknown",
+          "color": "silver",
+          "material": "aluminum",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Laptop stand"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "clear",
+          "material": "tempered glass",
+          "size": "6.1-inch"
+        },
+        "latency_ms": 4667.234,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Phone screen protector"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "ikea",
+          "color": "white",
+          "material": "wood",
+          "size": "40 cm"
+        },
+        "latency_ms": 5636.973,
+        "predicted": {
+          "brand": "IKEA",
+          "color": "White",
+          "material": "Wood",
+          "size": "40 cm wide"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "IKEA bedside table"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "clear",
+          "material": "glass",
+          "size": "1l"
+        },
+        "latency_ms": 4712.675,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Kitchen storage jar"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "metal",
+          "size": "unknown"
+        },
+        "latency_ms": 5288.523,
+        "predicted": {
+          "brand": "unknown",
+          "color": "Black",
+          "material": "metal",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Desk lamp"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "white",
+          "material": "cotton",
+          "size": "70 x 140 cm"
+        },
+        "latency_ms": 5706.94,
+        "predicted": {
+          "brand": "unknown",
+          "color": "white",
+          "material": "cotton",
+          "size": "70 x 140 cm"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Bath towel"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "green",
+          "material": "velvet",
+          "size": "45 x 45 cm"
+        },
+        "latency_ms": 5877.869,
+        "predicted": {
+          "brand": "unknown",
+          "color": "Green",
+          "material": "velvet",
+          "size": "45 x 45 cm"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Sofa cushion cover"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "50ml"
+        },
+        "latency_ms": 4910.683,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "50ml"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Hydrating face cream"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "500ml"
+        },
+        "latency_ms": 4975.871,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "500ml"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Daily shampoo"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "30 ml"
+        },
+        "latency_ms": 5468.245,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "30 ml"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Vitamin C serum"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "red",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "latency_ms": 4926.435,
+        "predicted": {
+          "brand": "unknown",
+          "color": "Red",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Matte lipstick"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "latency_ms": 5224.286,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "unknown",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Face cleanser"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "blue",
+          "material": "foam",
+          "size": "6 mm"
+        },
+        "latency_ms": 4781.469,
+        "predicted": {
+          "brand": "unknown",
+          "color": "Blue",
+          "material": "foam",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Yoga mat"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "black",
+          "material": "metal",
+          "size": "10 kg"
+        },
+        "latency_ms": 4738.006,
+        "predicted": {
+          "brand": "unknown",
+          "color": "Black",
+          "material": "metal",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Training dumbbell"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "graphite",
+          "size": "grip size 3"
+        },
+        "latency_ms": 5275.235,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "Graphite",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Tennis racket"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "white and black",
+          "material": "synthetic leather",
+          "size": "5"
+        },
+        "latency_ms": 5039.027,
+        "predicted": {
+          "brand": "unknown",
+          "color": "white and black",
+          "material": "synthetic leather",
+          "size": "5"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Football"
+      },
+      {
+        "error": null,
+        "expected": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "latex",
+          "size": "unknown"
+        },
+        "latency_ms": 5330.905,
+        "predicted": {
+          "brand": "unknown",
+          "color": "unknown",
+          "material": "latex",
+          "size": "unknown"
+        },
+        "runtime": "LOCAL_HF",
+        "title": "Resistance band set"
+      }
+    ],
+    "field_exact_accuracy": 0.908,
+    "hallucination_rate": 0.0,
+    "median_latency_ms": 5068.639,
+    "model": "Qwen/Qwen3.5-9B",
+    "name": "qwen_local_hf",
+    "p95_latency_ms": 5877.869,
+    "provider": "huggingface_local",
+    "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "runtime_counts": {
+      "LOCAL_HF": 30
+    },
+    "schema_success_rate": 1.0,
+    "unknown_correctness_rate": 1.0
+  },
+  "schema_version": "1.0"
+}

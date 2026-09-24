@@ -422,7 +422,7 @@ tests/
 ## 11) Public Data Assumptions
 The project uses processed public Shopify product catalogue data for training/evaluation. Large raw/cache data is intentionally not committed. The ingestion path records source provenance, split fingerprints, category distribution, and disjoint split ownership in `data/processed/dataset_metadata.json`.
 
-The 120-row `feedback_pool.json` is removed from the untouched test split before review. Human-reviewed feedback may therefore become future training evidence without contaminating canonical evaluation.
+The 120-row `feedback_pool.json` is removed from the untouched test split before review. Human-reviewed feedback may therefore become future training evidence without contaminating canonical evaluation. AI-assisted decisions are retained as diagnostic evidence but are explicitly excluded from training eligibility.
 
 ## 12) Engineering Roadmap
 ### Immediate: feedback evidence
@@ -430,7 +430,7 @@ Status: **implemented for the first export slice**.
 
 Implemented:
 1. Export only resolved, not-yet-exported review tasks with original prediction, reviewer action, corrected values, review reason, and workflow id.
-2. Validate records and exclude incomplete, rejected, invalid, or ambiguous approved examples from training input.
+2. Validate records and exclude incomplete, rejected, invalid, ambiguous approved, or non-human examples from training input.
 3. Report correction counts and rates by category and review reason.
 4. Produce versioned JSONL evidence, training, and exclusion artifacts with a checksummed manifest.
 5. Track completed batches and review-task membership in SQLite to prevent duplicate exports.
@@ -462,7 +462,9 @@ ATTRIBUTE_PROVIDER=mock .venv/bin/python scripts/review_campaign.py \
 .venv/bin/python scripts/review_campaign.py report CAMPAIGN_ID
 ```
 
-The campaign runner preserves the model's natural policy decision. Naturally uncertain cases reuse their policy-created task; auto-accepted controls receive a separate `campaign_control` task. Reference labels are stored only in campaign persistence and are absent from review queue responses, templates, and feedback training JSONL.
+The campaign runner preserves the model's natural policy decision. Naturally uncertain cases reuse their policy-created task; auto-accepted controls receive a separate `campaign_control` task. Reference labels are stored only in campaign persistence and are absent from review queue responses, templates, blind review packets, and feedback training JSONL.
+
+AI-assisted review is a separate evidence track for periods when qualified human reviewers are unavailable. `scripts/ai_assisted_review.py export` emits only reviewer-facing fields. Its decision importer requires a reviewer id, rationale, confidence, complete task coverage by default, and a separate `--apply` confirmation. Persistence records `reviewer_type`, `reviewer_id`, and `reviewer_confidence`; campaign readiness and feedback training eligibility count only `human` decisions. Reference-label comparison occurs only after decisions have been frozen.
 
 ### Implemented production baseline
 - Production fails startup when authentication secrets or allowed hosts are missing.

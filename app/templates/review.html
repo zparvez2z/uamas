@@ -60,6 +60,7 @@
           <div><span>Reason</span><strong>{{ task.reason }}</strong></div>
           <div><span>Risk</span><strong>{{ task.risk_level }}</strong></div>
           <div><span>Updated</span><strong>{{ task.updated_at }}</strong></div>
+          <div><span>Reviewer type</span><strong>{{ task.reviewer_type or "Unresolved" }}</strong></div>
           <div><span>Listing</span><strong>{{ task.listing_id }}</strong></div>
           <div><span>Prediction</span><strong>{{ task.prediction_id or "None" }}</strong></div>
           {% if task.campaign_id %}
@@ -134,6 +135,8 @@
         <div class="diagnostics-grid review-meta-grid">
           <div><span>Corrected category</span><strong>{{ task.corrected_category or "None" }}</strong></div>
           <div><span>Notes</span><strong>{{ task.notes or "None" }}</strong></div>
+          <div><span>Reviewer</span><strong>{{ task.reviewer_type or "Unknown" }}{% if task.reviewer_id %} / {{ task.reviewer_id }}{% endif %}</strong></div>
+          <div><span>Reviewer confidence</span><strong>{{ task.reviewer_confidence if task.reviewer_confidence is not none else "Not recorded" }}</strong></div>
         </div>
         {% endif %}
       </section>

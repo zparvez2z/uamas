@@ -497,6 +497,8 @@ def submit_review_task_decision(
         corrected_category=corrected_category.strip() or None,
         corrected_attributes=corrected_attributes,
         notes=notes.strip() or None,
+        reviewer_type="human",
+        reviewer_id="web_admin",
     )
     try:
         review_store.record_review_decision(task_id, decision)
@@ -611,7 +613,10 @@ def get_review_task(task_id: str) -> ReviewTask:
 )
 def record_review_task_decision(task_id: str, decision: ReviewDecision) -> ReviewTask:
     try:
-        return review_store.record_review_decision(task_id, decision)
+        human_decision = decision.model_copy(
+            update={"reviewer_type": "human", "reviewer_id": "api_operator"}
+        )
+        return review_store.record_review_decision(task_id, human_decision)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

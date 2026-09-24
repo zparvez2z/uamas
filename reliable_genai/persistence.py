@@ -83,6 +83,9 @@ class SQLiteReviewStore:
                     corrected_category TEXT,
                     corrected_attributes_json TEXT NOT NULL,
                     notes TEXT,
+                    reviewer_type TEXT,
+                    reviewer_id TEXT,
+                    reviewer_confidence REAL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     FOREIGN KEY(listing_id) REFERENCES listings(id),
@@ -243,6 +246,26 @@ class SQLiteReviewStore:
                 conn.execute(
                     "ALTER TABLE review_campaigns ADD COLUMN invalidation_reason TEXT"
                 )
+            review_columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(review_tasks)").fetchall()
+            }
+            if "reviewer_type" not in review_columns:
+                conn.execute("ALTER TABLE review_tasks ADD COLUMN reviewer_type TEXT")
+            if "reviewer_id" not in review_columns:
+                conn.execute("ALTER TABLE review_tasks ADD COLUMN reviewer_id TEXT")
+            if "reviewer_confidence" not in review_columns:
+                conn.execute(
+                    "ALTER TABLE review_tasks ADD COLUMN reviewer_confidence REAL"
+                )
+            conn.execute(
+                """
+                UPDATE review_tasks
+                SET reviewer_type = 'human'
+                WHERE reviewer_type IS NULL
+                  AND status IN ('approved', 'corrected', 'rejected')
+                """
+            )
         self._set_private_file_permissions(self.db_path)
 
     def create_listing(self, listing: ListingInput) -> str:
@@ -786,6 +809,9 @@ class SQLiteReviewStore:
                         corrected_category = ?,
                         corrected_attributes_json = ?,
                         notes = ?,
+                        reviewer_type = ?,
+                        reviewer_id = ?,
+                        reviewer_confidence = ?,
                         updated_at = ?
                     WHERE id = ? AND status = 'pending'
                     """,
@@ -794,6 +820,9 @@ class SQLiteReviewStore:
                         decision.corrected_category,
                         json.dumps(decision.corrected_attributes),
                         decision.notes,
+                        decision.reviewer_type,
+                        decision.reviewer_id,
+                        decision.reviewer_confidence,
                         now,
                         task_id,
                     ),
@@ -1171,6 +1200,9 @@ class SQLiteReviewStore:
                     review_tasks.status AS review_status,
                     review_tasks.reason AS review_reason,
                     review_tasks.corrected_category,
+                    review_tasks.reviewer_type,
+                    review_tasks.reviewer_id,
+                    review_tasks.reviewer_confidence,
                     predictions.category_set_json,
                     predictions.reliability_json
                 FROM review_campaign_items
@@ -1199,6 +1231,9 @@ class SQLiteReviewStore:
                     review_tasks.risk_level AS review_risk_level,
                     review_tasks.corrected_category,
                     review_tasks.corrected_attributes_json,
+                    review_tasks.reviewer_type,
+                    review_tasks.reviewer_id,
+                    review_tasks.reviewer_confidence,
                     review_tasks.created_at AS review_created_at,
                     review_tasks.updated_at AS review_updated_at,
                     listings.external_id,
@@ -1861,6 +1896,9 @@ class SQLiteReviewStore:
             corrected_category=row["corrected_category"],
             corrected_attributes=json.loads(row["corrected_attributes_json"]),
             notes=row["notes"],
+            reviewer_type=row["reviewer_type"],
+            reviewer_id=row["reviewer_id"],
+            reviewer_confidence=row["reviewer_confidence"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

@@ -163,7 +163,7 @@ Applied cleanup creates a backup, prunes expired detailed agent history, and pre
 
 ## Feedback Evidence
 
-Preview resolved human reviews that are ready for export:
+Preview resolved review evidence that is ready for export:
 
 ```bash
 .venv/bin/python scripts/export_review_feedback.py
@@ -175,7 +175,7 @@ Write a versioned, deduplicated evidence batch after reviewing the preview:
 .venv/bin/python scripts/export_review_feedback.py --apply
 ```
 
-Each batch separates complete review evidence, training-eligible examples, and excluded records with validation reasons. Generated feedback artifacts remain local under `data/feedback/`; retraining and classifier promotion are still explicit operations.
+Each batch separates complete review evidence, training-eligible human examples, and excluded records with validation reasons. AI-assisted decisions remain useful for diagnostics but are always excluded from retraining. Generated feedback artifacts remain local under `data/feedback/`; retraining and classifier promotion are still explicit operations.
 
 ## Data
 
@@ -216,6 +216,18 @@ ATTRIBUTE_PROVIDER=mock .venv/bin/python scripts/review_campaign.py \
 ```
 
 Review queued items at `/review?campaign_id=CAMPAIGN_ID`. Dataset reference labels remain hidden from reviewer HTML and APIs; they are used only for aggregate post-review comparison.
+
+When expert reviewers are unavailable, create a blind AI-assisted packet and apply a completed decision packet with explicit provenance:
+
+```bash
+.venv/bin/python scripts/ai_assisted_review.py --db-path data/uamas.db \
+  export CAMPAIGN_ID --output /tmp/blind-review.json
+
+.venv/bin/python scripts/ai_assisted_review.py --db-path data/uamas.db \
+  apply CAMPAIGN_ID --decisions /tmp/ai-decisions.json
+```
+
+The apply command is validation-only unless `--apply` is added. AI-assisted reviews resolve the operational queue and produce agreement diagnostics, but they do not count toward human readiness or training eligibility.
 
 ## Validation
 

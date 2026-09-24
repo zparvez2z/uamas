@@ -118,6 +118,9 @@ class ReviewTask(BaseModel):
     corrected_category: Optional[str] = None
     corrected_attributes: Dict[str, object] = Field(default_factory=dict)
     notes: Optional[str] = None
+    reviewer_type: Optional[Literal["human", "ai_assisted"]] = None
+    reviewer_id: Optional[str] = None
+    reviewer_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     created_at: str
     updated_at: str
 
@@ -134,6 +137,9 @@ class ReviewDecision(BaseModel):
     corrected_category: Optional[str] = Field(default=None, max_length=500)
     corrected_attributes: Dict[str, object] = Field(default_factory=dict)
     notes: Optional[str] = Field(default=None, max_length=4_000)
+    reviewer_type: Literal["human", "ai_assisted"] = "human"
+    reviewer_id: Optional[str] = Field(default=None, max_length=200)
+    reviewer_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class AgentRun(BaseModel):

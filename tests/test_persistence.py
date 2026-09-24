@@ -102,6 +102,34 @@ def test_store_records_review_decision(tmp_path: Path) -> None:
     assert len(store.list_review_tasks(status="corrected")) == 1
 
 
+def test_store_persists_ai_assisted_reviewer_provenance(tmp_path: Path) -> None:
+    store = SQLiteReviewStore(tmp_path / "uamas.db")
+    listing_id = store.create_listing(
+        ListingInput(title="dress shoe", description="formal leather")
+    )
+    task = store.create_review_task(
+        listing_id=listing_id,
+        prediction_id=None,
+        reason="campaign_control",
+    )
+
+    updated = store.record_review_decision(
+        task.id,
+        ReviewDecision(
+            action="correct",
+            corrected_category="Shoes",
+            notes="The title explicitly identifies a shoe.",
+            reviewer_type="ai_assisted",
+            reviewer_id="codex-review-v1",
+            reviewer_confidence=0.96,
+        ),
+    )
+
+    assert updated.reviewer_type == "ai_assisted"
+    assert updated.reviewer_id == "codex-review-v1"
+    assert updated.reviewer_confidence == 0.96
+
+
 def test_store_diagnostics_counts_review_tasks(tmp_path: Path) -> None:
     store = SQLiteReviewStore(tmp_path / "uamas.db")
     listing_id = store.create_listing(ListingInput(title="item", description="desc"))

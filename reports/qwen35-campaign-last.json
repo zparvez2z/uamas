@@ -1,0 +1,73 @@
+{
+  "completed_at": null,
+  "config": {
+    "dataset_fingerprint": "4c0fe4f35b82c75593d1454177b0f1f927e220c9d400db3d94a42a0052ceb8d2",
+    "labels": [
+      "Shoes",
+      "Clothing",
+      "Electronics",
+      "Home",
+      "Beauty",
+      "Sports"
+    ],
+    "name": "qwen35-real-review-v1",
+    "per_category": 20,
+    "runtime_config": {
+      "attribute": {
+        "compute_dtype": "float16",
+        "device": "auto",
+        "max_input_tokens": 4096,
+        "max_new_tokens": 192,
+        "model": "Qwen/Qwen3.5-9B",
+        "provider": "huggingface_local",
+        "quantization": "nf4",
+        "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
+      },
+      "semantic": {
+        "device": "cpu",
+        "model": "sentence-transformers/all-MiniLM-L6-v2",
+        "provider": "sentence_transformers",
+        "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+      }
+    },
+    "runtime_mode": "LOCAL_HF",
+    "seed": 42,
+    "source_split": "feedback_pool"
+  },
+  "created_at": "2026-09-22T13:01:31.550114+00:00",
+  "dataset_fingerprint": "4c0fe4f35b82c75593d1454177b0f1f927e220c9d400db3d94a42a0052ceb8d2",
+  "failed_this_run": 0,
+  "id": "cmp_adca837f21fc1e25",
+  "invalidated_at": null,
+  "invalidation_reason": null,
+  "item_state_counts": {
+    "queued": 120
+  },
+  "name": "qwen35-real-review-v1",
+  "per_category": 20,
+  "preflight": {
+    "llm_device": "cuda:0",
+    "llm_error": null,
+    "llm_model": "Qwen/Qwen3.5-9B",
+    "llm_model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+    "llm_provider": "huggingface_local",
+    "llm_runtime": "LOCAL_HF",
+    "semantic_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "semantic_provider": "sentence_transformers",
+    "semantic_reason": null,
+    "semantic_status": "ok"
+  },
+  "processed_this_run": 15,
+  "recovered_processing_count": 0,
+  "released_after_abort_count": 0,
+  "review_status_counts": {
+    "pending": 120
+  },
+  "runtime_mode": "LOCAL_HF",
+  "seed": 42,
+  "selected_count": 120,
+  "source_split": "feedback_pool",
+  "status": "reviewing",
+  "succeeded_this_run": 15,
+  "updated_at": "2026-09-22T13:47:09.137229+00:00"
+}
